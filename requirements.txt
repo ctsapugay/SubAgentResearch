@@ -1,0 +1,12 @@
+# Core dependencies
+pydantic>=2.0.0  # For data validation (optional, but useful)
+pyyaml>=6.0  # For config files (optional)
+
+# Testing
+pytest>=7.0.0
+pytest-cov>=4.0.0  # For coverage reports
+
+# Optional dependencies (for future use)
+# docker>=6.0.0  # For container support
+# requests>=2.28.0  # For web_search tool
+# beautifulsoup4>=4.11.0  # For web parsing
