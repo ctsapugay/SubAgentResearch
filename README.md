@@ -131,7 +131,24 @@ If Docker is not available, the system will use directory-based isolation (defau
 
 ## Usage
 
-### Basic Example
+### Isolation Modes
+
+The system supports two isolation modes:
+
+1. **Directory-based isolation** (default): Uses directory separation and Python virtual environments
+   - Faster startup time
+   - Lower resource overhead
+   - Suitable for trusted code
+   - No Docker required
+
+2. **Container-based isolation**: Uses Docker containers for stronger isolation
+   - Enhanced security with OS-level isolation
+   - Resource limits (CPU, memory, PIDs)
+   - Network isolation
+   - Suitable for untrusted code
+   - Requires Docker
+
+### Basic Example (Directory Mode)
 
 ```python
 from src.sandbox_builder import SandboxBuilder
@@ -219,6 +236,94 @@ print(content2)  # "Sandbox 2"
 # Clean up
 builder.cleanup(sandbox1)
 builder.cleanup(sandbox2)
+```
+
+### Container Mode Example
+
+```python
+from src.sandbox_builder import SandboxBuilder
+from src.sandbox.container_config import ContainerConfig, ResourceLimits
+
+# Initialize builder with container isolation
+config = ContainerConfig(
+    base_image="python:3.11-slim",
+    resource_limits=ResourceLimits(
+        memory="512m",      # 512 MB memory limit
+        cpus=1.0,           # 1 CPU core
+        pids_limit=100      # Max 100 processes
+    ),
+    network_mode="none",    # No network access
+    read_only=True          # Read-only root filesystem
+)
+
+builder = SandboxBuilder(
+    isolation_mode="container",
+    container_config=config
+)
+
+# Build sandbox (creates Docker container)
+sandbox_id = builder.build_from_skill_file("examples/example_skill.md")
+
+# Execute tools (runs inside container)
+result = builder.execute_in_sandbox(
+    sandbox_id,
+    "write_file",
+    file_path="test.txt",
+    content="Hello from container!"
+)
+
+# Monitor resource usage
+from src.sandbox.resource_manager import ResourceManager
+import docker
+
+docker_client = docker.from_env()
+resource_manager = ResourceManager(docker_client, default_config=config)
+
+stats = resource_manager.get_container_stats(sandbox_id)
+print(f"CPU: {stats['cpu_percent']}%, Memory: {stats['memory_percent']}%")
+
+# Enforce limits
+enforcement = resource_manager.enforce_limits(sandbox_id, action_on_exceed="warn")
+if enforcement["exceeded"]:
+    print(f"Warning: {enforcement['violations']}")
+
+# Cleanup
+builder.cleanup(sandbox_id)
+```
+
+### Resource Management
+
+Monitor and enforce resource limits for container-based sandboxes:
+
+```python
+from src.sandbox.resource_manager import ResourceManager
+from src.sandbox.container_config import ContainerConfig, ResourceLimits
+import docker
+
+docker_client = docker.from_env()
+config = ContainerConfig(
+    resource_limits=ResourceLimits(memory="512m", cpus=1.0, pids_limit=100)
+)
+resource_manager = ResourceManager(docker_client, default_config=config)
+
+# Get container stats
+stats = resource_manager.get_container_stats(container_id)
+print(f"CPU Usage: {stats['cpu_percent']}%")
+print(f"Memory Usage: {stats['memory_usage']} bytes ({stats['memory_percent']}%)")
+print(f"Processes: {stats['pids']}")
+
+# Enforce limits with automatic action
+result = resource_manager.enforce_limits(
+    container_id,
+    action_on_exceed="stop"  # Options: "log", "warn", "stop", "kill"
+)
+
+# Cleanup containers exceeding limits
+cleaned = resource_manager.cleanup_exceeded_containers(
+    exceeded_duration=300,      # 5 minutes
+    max_exceeded_count=10,      # 10 violations
+    action="stop"
+)
 ```
 
 ## Skill File Format
@@ -336,10 +441,22 @@ When you call `execute_in_sandbox()`:
 
 ## Security & Isolation
 
+### Directory Mode
 - **Path Isolation**: All file operations are restricted to the sandbox workspace
 - **Separate Environments**: Each sandbox has its own directory and virtual environment
 - **No System Access**: Tools cannot access files outside the sandbox
 - **Cleanup**: Sandboxes can be completely removed when done
+
+### Container Mode
+- **OS-Level Isolation**: Containers provide process and filesystem isolation
+- **Resource Limits**: CPU, memory, and process limits enforced by Docker
+- **Network Isolation**: Containers can run with no network access (`network_mode="none"`)
+- **Read-Only Filesystem**: Root filesystem can be mounted read-only for additional security
+- **Capability Dropping**: Containers run with minimal Linux capabilities
+- **Non-Root User**: Containers run as non-root user by default
+- **Security Options**: Additional hardening options available (seccomp, AppArmor)
+
+See [docs/SECURITY.md](docs/SECURITY.md) for detailed security documentation.
 
 ## Project Structure
 
@@ -353,7 +470,12 @@ Subagent Research/
 │   ├── sandbox/
 │   │   ├── __init__.py
 │   │   ├── manager.py             # Sandbox lifecycle
-│   │   ├── container.py           # Docker support (future)
+│   │   ├── container.py           # Docker container management
+│   │   ├── container_config.py    # Container configuration
+│   │   ├── container_environment.py # Container environment builder
+│   │   ├── container_executor.py  # Tool execution in containers
+│   │   ├── docker_image_builder.py # Docker image building
+│   │   ├── resource_manager.py   # Resource monitoring and limits
 │   │   └── environment.py        # Environment setup
 │   ├── tools/
 │   │   ├── __init__.py
@@ -405,15 +527,29 @@ When adding new features:
 - Check that Python 3.11+ is installed
 - Verify write permissions in the sandbox directory
 - Check that required packages can be installed
+- For container mode: Ensure Docker is installed and running (`docker ps`)
 
 ### Tool execution errors
 - Verify the tool is registered in `ToolRegistry`
 - Check tool parameter validation
 - Ensure file paths are within the sandbox workspace
+- For container mode: Check container logs with `docker logs sandbox-{sandbox_id}`
 
 ### Import errors
 - Make sure all dependencies are installed: `pip install -r requirements.txt`
 - Verify Python path includes the project root
+
+### Container mode issues
+- **Docker not running**: Start Docker Desktop or Docker daemon
+- **Permission denied**: Add user to docker group: `sudo usermod -aG docker $USER`
+- **Out of disk space**: Clean up unused images: `docker image prune -a`
+- **Container timeout**: Increase timeout in `ContainerToolExecutor` or check resource limits
+
+See [docs/DOCKER_IMPLEMENTATION_PLAN.md](docs/DOCKER_IMPLEMENTATION_PLAN.md) for detailed troubleshooting.
+
+## Migration Guide
+
+Migrating from directory-based to container-based isolation? See [docs/MIGRATION_GUIDE.md](docs/MIGRATION_GUIDE.md) for step-by-step instructions.
 
 ## License
 
