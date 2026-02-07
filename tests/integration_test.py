@@ -5,7 +5,17 @@ from pathlib import Path
 
 import pytest
 
+from src.sandbox.container_config import ContainerConfig, ResourceLimits
 from src.sandbox_builder import SandboxBuilder
+
+# Check if Docker is available
+try:
+    import docker
+    docker_client = docker.from_env()
+    docker_client.ping()
+    DOCKER_AVAILABLE = True
+except Exception:
+    DOCKER_AVAILABLE = False
 
 
 @pytest.fixture
@@ -257,3 +267,152 @@ class TestFullPipeline:
         # Verify they're all gone
         for sandbox_id in sandbox_ids:
             assert builder.get_sandbox_info(sandbox_id) is None
+
+
+@pytest.mark.skipif(not DOCKER_AVAILABLE, reason="Docker not available")
+class TestContainerModeIntegration:
+    """Integration tests for container isolation mode."""
+    
+    @pytest.fixture
+    def container_builder(self, temp_dir):
+        """Create a SandboxBuilder instance with container isolation."""
+        return SandboxBuilder(
+            sandbox_base_path=temp_dir,
+            isolation_mode="container"
+        )
+    
+    def test_build_sandbox_with_container_mode(self, container_builder, simple_skill_file):
+        """Test building a sandbox with container isolation mode."""
+        sandbox_id = container_builder.build_from_skill_file(str(simple_skill_file))
+        assert sandbox_id is not None
+        
+        # Get sandbox info
+        info = container_builder.get_sandbox_info(sandbox_id)
+        assert info is not None
+        assert info["isolation_mode"] == "container"
+        assert "container_id" in info
+        assert info["container_id"] is not None
+        
+        # Cleanup
+        assert container_builder.cleanup(sandbox_id) is True
+    
+    def test_execute_tools_in_container(self, container_builder, simple_skill_file):
+        """Test executing tools within a container."""
+        sandbox_id = container_builder.build_from_skill_file(str(simple_skill_file))
+        
+        # Write a file
+        write_result = container_builder.execute_in_sandbox(
+            sandbox_id,
+            "write_file",
+            file_path="test.txt",
+            content="Hello from container!"
+        )
+        assert write_result is not None
+        
+        # Read the file back
+        content = container_builder.execute_in_sandbox(
+            sandbox_id,
+            "read_file",
+            file_path="test.txt"
+        )
+        assert "Hello from container!" in content
+        
+        # Cleanup
+        container_builder.cleanup(sandbox_id)
+    
+    def test_container_isolation(self, container_builder, simple_skill_file):
+        """Test that containers provide isolation."""
+        # Create two sandboxes
+        sandbox_id1 = container_builder.build_from_skill_file(str(simple_skill_file))
+        sandbox_id2 = container_builder.build_from_skill_file(str(simple_skill_file))
+        
+        assert sandbox_id1 != sandbox_id2
+        
+        # Write different files in each sandbox
+        container_builder.execute_in_sandbox(
+            sandbox_id1,
+            "write_file",
+            file_path="file.txt",
+            content="Container 1"
+        )
+        
+        container_builder.execute_in_sandbox(
+            sandbox_id2,
+            "write_file",
+            file_path="file.txt",
+            content="Container 2"
+        )
+        
+        # Verify isolation
+        content1 = container_builder.execute_in_sandbox(
+            sandbox_id1,
+            "read_file",
+            file_path="file.txt"
+        )
+        assert "Container 1" in content1
+        
+        content2 = container_builder.execute_in_sandbox(
+            sandbox_id2,
+            "read_file",
+            file_path="file.txt"
+        )
+        assert "Container 2" in content2
+        
+        # Cleanup
+        container_builder.cleanup(sandbox_id1)
+        container_builder.cleanup(sandbox_id2)
+    
+    def test_container_with_custom_config(self, temp_dir, simple_skill_file):
+        """Test container mode with custom configuration."""
+        config = ContainerConfig(
+            base_image="python:3.11-slim",
+            resource_limits=ResourceLimits(
+                memory="256m",
+                cpus=0.5
+            )
+        )
+        
+        builder = SandboxBuilder(
+            sandbox_base_path=temp_dir,
+            isolation_mode="container",
+            container_config=config
+        )
+        
+        sandbox_id = builder.build_from_skill_file(str(simple_skill_file))
+        assert sandbox_id is not None
+        
+        # Verify it works
+        builder.execute_in_sandbox(
+            sandbox_id,
+            "write_file",
+            file_path="test.txt",
+            content="Test"
+        )
+        
+        # Cleanup
+        builder.cleanup(sandbox_id)
+    
+    def test_backward_compatibility_directory_mode(self, temp_dir, simple_skill_file):
+        """Test that directory mode still works (backward compatibility)."""
+        builder = SandboxBuilder(
+            sandbox_base_path=temp_dir,
+            isolation_mode="directory"
+        )
+        
+        sandbox_id = builder.build_from_skill_file(str(simple_skill_file))
+        assert sandbox_id is not None
+        
+        info = builder.get_sandbox_info(sandbox_id)
+        assert info["isolation_mode"] == "directory"
+        assert "container_id" not in info
+        
+        # Verify tools work
+        builder.execute_in_sandbox(
+            sandbox_id,
+            "write_file",
+            file_path="test.txt",
+            content="Test"
+        )
+        
+        # Cleanup
+        builder.cleanup(sandbox_id)

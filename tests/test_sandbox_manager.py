@@ -68,7 +68,20 @@ class TestSandboxManager:
         assert manager.base_path == Path(temp_base_path).resolve()
         assert manager.environment_builder is not None
         assert manager.tool_registry is not None
+        assert manager.isolation_mode == "directory"
         assert len(manager.active_sandboxes) == 0
+    
+    def test_init_with_isolation_mode(self, temp_base_path):
+        """Test SandboxManager initialization with isolation mode."""
+        manager = SandboxManager(temp_base_path, isolation_mode="directory")
+        assert manager.isolation_mode == "directory"
+        assert manager.container_environment_builder is None
+        assert manager.container_executor is None
+    
+    def test_init_invalid_isolation_mode(self, temp_base_path):
+        """Test SandboxManager initialization with invalid isolation mode."""
+        with pytest.raises(ValueError, match="isolation_mode must be"):
+            SandboxManager(temp_base_path, isolation_mode="invalid")
     
     def test_create_sandbox(self, manager, simple_skill):
         """Test creating a sandbox."""
@@ -267,6 +280,8 @@ class TestSandboxManager:
         assert "workspace_path" in info
         assert "tools" in info
         assert "status" in info
+        assert "isolation_mode" in info
+        assert info["isolation_mode"] == "directory"
         
         # Check types
         assert isinstance(info["tools"], list)

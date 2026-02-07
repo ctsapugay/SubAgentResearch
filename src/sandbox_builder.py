@@ -3,6 +3,7 @@
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from src.sandbox.container_config import ContainerConfig
 from src.sandbox.manager import SandboxManager
 from src.skill_parser.parser import SkillParser
 from src.skill_parser.skill_definition import SkillDefinition
@@ -16,22 +17,48 @@ class SandboxBuilder:
     - Creating sandboxes from skill definitions
     - Executing tools within sandboxes
     - Managing sandbox lifecycle
+    
+    Supports two isolation modes:
+    - "directory": Directory-based isolation with virtual environments (default)
+    - "container": Docker container-based isolation with stronger security
     """
     
-    def __init__(self, sandbox_base_path: str = "./sandboxes"):
+    def __init__(
+        self,
+        sandbox_base_path: str = "./sandboxes",
+        isolation_mode: str = "directory",
+        container_config: Optional[ContainerConfig] = None
+    ):
         """Initialize the sandbox builder.
         
         Args:
             sandbox_base_path: Base directory where sandboxes will be created
+            isolation_mode: Isolation method ("directory" or "container")
+            container_config: Configuration for container mode (optional, uses defaults if not provided)
+        
+        Raises:
+            ValueError: If isolation_mode is invalid
+            RuntimeError: If Docker is required but not available
         """
+        self.isolation_mode = isolation_mode
+        self.container_config = container_config
         self.skill_parser = SkillParser()
-        self.sandbox_manager = SandboxManager(sandbox_base_path)
+        self.sandbox_manager = SandboxManager(
+            sandbox_base_path,
+            isolation_mode=isolation_mode,
+            container_config=container_config
+        )
     
-    def build_from_skill_file(self, skill_path: str) -> str:
+    def build_from_skill_file(
+        self,
+        skill_path: str,
+        container_config: Optional[ContainerConfig] = None
+    ) -> str:
         """Build a sandbox from a skill file path.
         
         Args:
             skill_path: Path to the SKILL.md file
+            container_config: Optional container configuration (overrides default if provided)
             
         Returns:
             Unique sandbox_id (UUID string)
@@ -45,13 +72,18 @@ class SandboxBuilder:
         skill = self.skill_parser.parse(skill_path)
         
         # Create sandbox from parsed skill
-        return self.build_from_skill_definition(skill)
+        return self.build_from_skill_definition(skill, container_config)
     
-    def build_from_skill_definition(self, skill: SkillDefinition) -> str:
+    def build_from_skill_definition(
+        self,
+        skill: SkillDefinition,
+        container_config: Optional[ContainerConfig] = None
+    ) -> str:
         """Build a sandbox from an already-parsed skill definition.
         
         Args:
             skill: The SkillDefinition object
+            container_config: Optional container configuration (overrides default if provided)
             
         Returns:
             Unique sandbox_id (UUID string)
@@ -59,7 +91,7 @@ class SandboxBuilder:
         Raises:
             RuntimeError: If sandbox creation fails
         """
-        return self.sandbox_manager.create_sandbox(skill)
+        return self.sandbox_manager.create_sandbox(skill, container_config)
     
     def get_sandbox_info(self, sandbox_id: str) -> Optional[Dict[str, Any]]:
         """Get information about a sandbox.
@@ -78,6 +110,8 @@ class SandboxBuilder:
             - workspace_path: Path to the workspace directory
             - tools: List of available tool names
             - status: Current status of the sandbox
+            - isolation_mode: Isolation method ("directory" or "container")
+            - container_id: Container ID (only present if isolation_mode="container")
         """
         return self.sandbox_manager.get_sandbox(sandbox_id)
     
