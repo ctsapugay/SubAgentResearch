@@ -97,6 +97,9 @@ A sandbox is an isolated, controlled environment where:
 
 - Python 3.11 or higher
 - pip or uv package manager
+- Docker (optional, for container-based sandbox isolation)
+  - Docker Desktop for macOS/Windows: https://www.docker.com/products/docker-desktop
+  - Docker Engine for Linux: https://docs.docker.com/engine/install/
 
 ### Setup
 
@@ -114,6 +117,17 @@ Or using uv:
 ```bash
 uv pip install -r requirements.txt
 ```
+
+**Note**: If you plan to use Docker container support (optional), ensure Docker is installed and running:
+```bash
+# Verify Docker installation
+docker --version
+
+# Check Docker daemon is running
+docker ps
+```
+
+If Docker is not available, the system will use directory-based isolation (default).
 
 ## Usage
 
