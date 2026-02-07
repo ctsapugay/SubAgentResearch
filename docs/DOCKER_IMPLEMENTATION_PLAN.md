@@ -3,7 +3,7 @@
 **Project**: Skill-to-Sandbox Pipeline  
 **Feature**: Docker Container Support for Enhanced Isolation  
 **Date**: February 2026  
-**Status**: Implementation Phase - Phase 4 Complete ✅
+**Status**: Implementation Phase - Phase 5 Complete ✅
 
 ## Table of Contents
 
@@ -237,11 +237,11 @@ Skills can specify container requirements in their definition:
 - ✅ Update all tests
 - ✅ Write integration tests
 
-### Phase 5: Resource Management (Week 5-6)
-- Implement resource limits
-- Add resource monitoring
-- Implement cleanup policies
-- Add resource usage reporting
+### Phase 5: Resource Management (Week 5-6) ✅ **COMPLETE**
+- ✅ Implement resource limits
+- ✅ Add resource monitoring
+- ✅ Implement cleanup policies
+- ✅ Add resource usage reporting
 
 ### Phase 6: Testing & Documentation (Week 6-7)
 - Write comprehensive tests
@@ -1169,11 +1169,38 @@ class ResourceManager:
 ```
 
 **Action Items**:
-1. Create `src/sandbox/resource_manager.py`
-2. Implement resource monitoring
-3. Implement limit enforcement
-4. Add cleanup policies
-5. Write tests
+1. ✅ Create `src/sandbox/resource_manager.py`
+2. ✅ Implement resource monitoring
+3. ✅ Implement limit enforcement
+4. ✅ Add cleanup policies
+5. ✅ Write tests
+
+**Status**: ✅ **COMPLETED**
+- Created `ResourceManager` class with comprehensive resource management functionality
+- Implemented `get_container_stats()` method that retrieves real-time resource usage:
+  - CPU usage percentage (calculated from Docker CPU stats)
+  - Memory usage and limits in bytes, plus percentage
+  - Network I/O (bytes received and transmitted)
+  - Process count (PIDs)
+  - Timestamp for tracking
+- Implemented `enforce_limits()` method that:
+  - Compares current usage against configured limits (CPU, memory, PIDs)
+  - Detects violations and tracks them over time
+  - Supports multiple actions: "log", "warn", "stop", "kill"
+  - Returns detailed violation information
+- Implemented `cleanup_exceeded_containers()` method with cleanup policies:
+  - Cleans up containers exceeding limits for extended duration (default: 5 minutes)
+  - Cleans up containers exceeding limits multiple times (default: 10 times)
+  - Supports "stop" or "kill" actions
+  - Handles missing containers gracefully
+- Added helper methods:
+  - `_parse_memory_limit()`: Parses memory limit strings to bytes
+  - `get_exceeded_containers()`: Returns tracking information
+  - `reset_tracking()`: Resets violation tracking
+- Comprehensive unit tests created in `tests/test_resource_manager.py` (23 tests, all passing)
+- Updated `src/sandbox/__init__.py` to export `ResourceManager`
+- Full type hints and logging throughout
+- Proper error handling for all Docker operations
 
 ---
 
@@ -1567,12 +1594,12 @@ print(logs.decode())
 - [x] Update all tests ✅
 - [x] Write integration tests ✅
 
-### Phase 5: Resource Management
-- [ ] Create resource_manager.py
-- [ ] Implement resource monitoring
-- [ ] Implement limit enforcement
-- [ ] Add cleanup policies
-- [ ] Write tests
+### Phase 5: Resource Management ✅ **COMPLETE**
+- [x] Create resource_manager.py ✅
+- [x] Implement resource monitoring ✅
+- [x] Implement limit enforcement ✅
+- [x] Add cleanup policies ✅
+- [x] Write tests ✅
 
 ### Phase 6: Testing & Documentation
 - [ ] Write comprehensive test suite
@@ -1602,10 +1629,10 @@ This implementation plan provides a comprehensive roadmap for adding Docker cont
 2. ✅ Phase 2: Environment Building - **COMPLETE**
 3. ✅ Phase 3: Tool Execution - **COMPLETE**
 4. ✅ Phase 4: Integration - **COMPLETE**
-5. ⏳ Phase 5: Resource Management - **NEXT**
-6. ⏳ Phase 6: Testing & Documentation - **PENDING**
+5. ✅ Phase 5: Resource Management - **COMPLETE**
+6. ⏳ Phase 6: Testing & Documentation - **NEXT**
 
-**Current Status**: Phase 4 (Integration) is complete. The system now supports both directory-based and container-based isolation modes with full backward compatibility. Ready to proceed with Phase 5 (Resource Management) for monitoring and limiting container resources.
+**Current Status**: Phase 5 (Resource Management) is complete. The system now includes comprehensive resource monitoring, limit enforcement, and cleanup policies for Docker containers. Ready to proceed with Phase 6 (Testing & Documentation) for finalizing the Docker implementation.
 
 ### Questions or Concerns?
 

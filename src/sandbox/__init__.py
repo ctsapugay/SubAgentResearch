@@ -7,6 +7,7 @@ from src.sandbox.container_environment import ContainerEnvironmentBuilder
 from src.sandbox.docker_image_builder import DockerImageBuilder
 from src.sandbox.environment import EnvironmentBuilder
 from src.sandbox.manager import SandboxManager
+from src.sandbox.resource_manager import ResourceManager
 
 __all__ = [
     "ContainerConfig",
@@ -16,5 +17,6 @@ __all__ = [
     "DockerImageBuilder",
     "EnvironmentBuilder",
     "ResourceLimits",
+    "ResourceManager",
     "SandboxManager",
 ]
