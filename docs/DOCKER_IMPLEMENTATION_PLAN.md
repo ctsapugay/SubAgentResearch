@@ -427,12 +427,34 @@ ENV PYTHONPATH=/workspace
 ```
 
 **Action Items**:
-1. Create `src/sandbox/docker_image_builder.py`
-2. Implement Dockerfile generation
-3. Implement image building with caching
-4. Add image tagging strategy (use skill hash)
-5. Implement cleanup methods
-6. Write unit tests with Docker mock
+1. ✅ Create `src/sandbox/docker_image_builder.py`
+2. ✅ Implement Dockerfile generation
+3. ✅ Implement image building with caching
+4. ✅ Add image tagging strategy (use skill hash)
+5. ✅ Implement cleanup methods
+6. ✅ Write unit tests with Docker mock
+
+**Status**: ✅ **COMPLETED**
+- Created `src/sandbox/docker_image_builder.py` with full `DockerImageBuilder` implementation
+- Implemented `_generate_dockerfile()` to create Dockerfiles from skill requirements
+  - Supports Python packages, system packages, and base image configuration
+  - Creates non-root user for security
+  - Sets up proper working directory and environment variables
+- Implemented `build_image_from_skill()` with image caching
+  - Checks if image exists before building
+  - Generates deterministic tags from skill hash for efficient caching
+  - Supports custom tags and build arguments
+- Implemented `_generate_image_tag()` using SHA256 hash of requirements
+  - Consistent tagging for same skill requirements
+  - Different tags for different requirements
+- Implemented cleanup methods:
+  - `cleanup_unused_images()` removes old images based on age
+  - `get_image_info()` retrieves image metadata
+  - `list_images()` lists images with prefix filtering
+- Comprehensive unit tests created in `tests/test_docker_image_builder.py` (29 tests, all passing)
+- Updated `src/sandbox/__init__.py` to export `DockerImageBuilder`
+- Full type hints and logging throughout
+- Proper error handling for Docker operations
 
 **Testing**:
 ```python
@@ -556,12 +578,22 @@ def create_container(self, skill, sandbox_id, image_tag, config):
 ```
 
 **Action Items**:
-1. Create `src/sandbox/container.py`
-2. Implement container creation with all security options
-3. Implement execution methods
-4. Add container state management
-5. Implement cleanup logic
-6. Write unit tests with Docker mock
+1. ✅ Create `src/sandbox/container.py`
+2. ✅ Implement container creation with all security options
+3. ✅ Implement execution methods
+4. ✅ Add container state management
+5. ✅ Implement cleanup logic
+6. ✅ Write unit tests with Docker mock
+
+**Status**: ✅ **COMPLETED**
+- Created `src/sandbox/container.py` with full `ContainerManager` implementation
+- Implemented all required methods: `create_container()`, `start_container()`, `stop_container()`, `remove_container()`, `execute_in_container()`, `get_container_info()`, `list_containers()`, `cleanup_containers()`
+- Container creation includes all security options: resource limits, read-only filesystem, tmpfs mounts, capability dropping, network isolation
+- Proper error handling for all Docker operations (NotFound, APIError)
+- Comprehensive unit tests created in `tests/test_container.py` (27 tests, all passing)
+- Matches `ContainerManagerProtocol` interface expected by `ContainerToolExecutor`
+- Full type hints and logging throughout
+- Updated `src/sandbox/__init__.py` to export `ContainerManager`
 
 **Testing**:
 ```python
@@ -784,12 +816,36 @@ class ContainerEnvironmentBuilder:
 ```
 
 **Action Items**:
-1. Create `src/sandbox/container_environment.py`
-2. Integrate DockerImageBuilder and ContainerManager
-3. Implement environment creation
-4. Implement cleanup
-5. Add metadata saving
-6. Write unit tests
+1. ✅ Create `src/sandbox/container_environment.py`
+2. ✅ Integrate DockerImageBuilder and ContainerManager
+3. ✅ Implement environment creation
+4. ✅ Implement cleanup
+5. ✅ Add metadata saving
+6. ✅ Write unit tests
+
+**Status**: ✅ **COMPLETED**
+- Created `src/sandbox/container_environment.py` with full `ContainerEnvironmentBuilder` implementation
+- Integrates `DockerImageBuilder` and `ContainerManager` to orchestrate container environment creation
+- Implemented `create_environment()` method that:
+  - Generates image tag from skill requirements
+  - Builds Docker image if it doesn't exist (with caching)
+  - Creates and starts Docker container
+  - Sets up workspace and logs directories
+  - Saves comprehensive metadata (skill info, container info, config)
+- Implemented `cleanup()` method that:
+  - Stops and removes container
+  - Optionally removes Docker image
+  - Removes workspace directory
+  - Handles errors gracefully
+- Comprehensive metadata saving includes:
+  - Skill information (name, description, tools, requirements)
+  - Container information (container_id, image_tag)
+  - Container configuration
+  - Workspace and logs paths
+- Comprehensive unit tests created in `tests/test_container_environment.py` (16 tests, all passing)
+- Updated `src/sandbox/__init__.py` to export `ContainerEnvironmentBuilder`
+- Full type hints and logging throughout
+- Proper error handling with cleanup on failure
 
 ---
 
@@ -1371,17 +1427,17 @@ print(logs.decode())
 ### Phase 1: Foundation
 - [x] Add docker dependency to requirements.txt ✅
 - [x] Create container_config.py with configuration classes ✅
-- [ ] Create container.py skeleton with ContainerManager
+- [x] Create container.py skeleton with ContainerManager ✅
 - [x] Write unit tests for configuration classes ✅
 - [x] Document Docker requirements in README ✅
 
-### Phase 2: Environment Building
-- [ ] Create docker_image_builder.py
-- [ ] Implement Dockerfile generation
-- [ ] Implement image building with caching
-- [ ] Create container_environment.py
-- [ ] Integrate image builder and container manager
-- [ ] Write unit tests
+### Phase 2: Environment Building ✅
+- [x] Create docker_image_builder.py ✅
+- [x] Implement Dockerfile generation ✅
+- [x] Implement image building with caching ✅
+- [x] Create container_environment.py ✅
+- [x] Integrate image builder and container manager ✅
+- [x] Write unit tests ✅
 
 ### Phase 3: Tool Execution ✅
 - [x] Create container_executor.py ✅
