@@ -5,7 +5,8 @@ Run real-world skill examples through the Skill-to-Sandbox pipeline.
 Demonstrates that the pipeline correctly handles YAML frontmatter skills
 from Cursor, Anthropic Claude Code, and community repositories.
 
-Uses directory-based isolation (no Docker required).
+Uses Docker container-based isolation by default. Pass --directory to use
+directory-based isolation instead (no Docker required).
 """
 
 import sys
@@ -44,6 +45,9 @@ def run_skill(builder: SandboxBuilder, parser: SkillParser, skill_path: Path):
     info = builder.get_sandbox_info(sandbox_id)
     if info:
         print(f"    Skill name:  {info['skill_name']}")
+        print(f"    Isolation:   {info['isolation_mode']}")
+        if info.get('container_id'):
+            print(f"    Container:   {info['container_id'][:12]}")
         print(f"    Tools:       {info['tools']}")
         print(f"    Workspace:   {info['workspace_path']}")
 
@@ -101,10 +105,20 @@ def main():
     for f in skill_files:
         print(f"  - {f.name}")
 
-    # Use directory mode (no Docker required)
+    # Parse CLI flag for isolation mode
+    isolation_mode = "container"
+    if "--directory" in sys.argv:
+        isolation_mode = "directory"
+
+    print(f"\nIsolation mode: {isolation_mode}")
+    if isolation_mode == "container":
+        print("  (Docker containers — pass --directory to skip Docker)\n")
+    else:
+        print("  (local directories — no Docker)\n")
+
     builder = SandboxBuilder(
         sandbox_base_path=str(PROJECT_ROOT / "sandboxes"),
-        isolation_mode="directory"
+        isolation_mode=isolation_mode
     )
     parser = SkillParser()
 
