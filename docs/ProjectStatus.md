@@ -26,7 +26,7 @@ This project is Part 1 of a multi-part research effort (see `docs/SubAgentResear
 
 | Part | Goal | Status |
 |------|------|--------|
-| **Part 1** | Skill/subagent definition → isolated sandbox environment | Infrastructure complete, real-world validation in progress |
+| **Part 1** | Skill/subagent definition → isolated sandbox environment | Infrastructure complete, real-world skill files added, parser update in progress |
 | **Part 2** | Skill + sandbox → synthetic training data (traces) | Not started |
 | **Part 3** | Training data → fine-tuned small model (e.g., Qwen3-4B with LoRA SFT) | Not started |
 | **Part 4** | Evaluate trained models against benchmarks | Not started |
@@ -170,7 +170,7 @@ A detailed implementation plan has been created at **`docs/REAL_WORLD_EXAMPLES_P
 
 | Task | Description | Files affected |
 |------|-------------|----------------|
-| **Task 1** | Create `examples/real_world/` with 3 skill files | New: 3 `.md` files |
+| **Task 1** ✅ | Create `examples/real_world/` with 3 skill files | New: 3 `.md` files |
 | **Task 2** | Update `SkillParser` to handle YAML frontmatter (with backward compatibility for heading-based format) | `src/skill_parser/parser.py` |
 | **Task 3** | Add 9 new parser tests for frontmatter + real-world skills | `tests/test_skill_parser.py` |
 | **Task 4** | Create end-to-end runner script using directory-mode sandboxes | New: `examples/run_real_world_examples.py` |
@@ -256,7 +256,11 @@ Subagent Research/
 │   ├── simple_skill.md                      # Simple test skill (heading-based)
 │   ├── complex_skill.md                     # Frontend Design Specialist (heading-based)
 │   ├── example_usage.py                     # Basic usage demo script
-│   └── container_example.py                 # Container mode demo script
+│   ├── container_example.py                 # Container mode demo script
+│   └── real_world/
+│       ├── cursor_create_rule.md            # Cursor create-rule skill (frontmatter)
+│       ├── anthropic_frontend_design.md     # Anthropic frontend-design skill (frontmatter)
+│       └── community_deep_research.md       # Community deep-research skill (frontmatter)
 ├── docs/
 │   ├── ProjectStatus.md                     # This file
 │   ├── SubAgentResearch.md                  # Full research vision (Parts 1–4)
@@ -306,7 +310,7 @@ pytest tests/ --cov=src --cov-report=html
 
 ### Near-term (Phase 6 — Real-World Examples)
 - [ ] Add YAML frontmatter support to `SkillParser`
-- [ ] Add 3 real-world skill files from Cursor, Anthropic, and community sources
+- [x] Add 3 real-world skill files from Cursor, Anthropic, and community sources
 - [ ] Add parser tests for frontmatter format
 - [ ] Create end-to-end runner script for real-world skills
 - [ ] Validate full pipeline with real skills

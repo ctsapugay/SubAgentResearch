@@ -66,13 +66,13 @@ class TestSandboxBuilderInit:
         builder = SandboxBuilder()
         assert builder.skill_parser is not None
         assert builder.sandbox_manager is not None
-        assert builder.isolation_mode == "directory"
+        assert builder.isolation_mode == "container"
     
     def test_init_custom_path(self, temp_dir):
         """Test initialization with custom path."""
         builder = SandboxBuilder(sandbox_base_path=temp_dir)
         assert builder.sandbox_manager.base_path == Path(temp_dir).resolve()
-        assert builder.isolation_mode == "directory"
+        assert builder.isolation_mode == "container"
     
     def test_init_with_isolation_mode(self, temp_dir):
         """Test initialization with isolation mode."""
@@ -161,7 +161,7 @@ class TestGetSandboxInfo:
         assert "tools" in info
         assert "workspace_path" in info
         assert "isolation_mode" in info
-        assert info["isolation_mode"] == "directory"
+        assert info["isolation_mode"] == "container"
     
     def test_get_sandbox_info_nonexistent(self, builder):
         """Test getting info for nonexistent sandbox."""

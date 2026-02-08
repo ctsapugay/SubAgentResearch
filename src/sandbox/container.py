@@ -1,6 +1,8 @@
 """Docker container management for sandbox isolation."""
 
 import logging
+import threading
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -115,6 +117,7 @@ class ContainerManager:
         container_params = {
             "image": image_tag,
             "name": f"sandbox-{sandbox_id}",
+            "command": ["sleep", "infinity"],  # Keep container alive for exec_run
             "working_dir": config.working_dir,
             "volumes": volumes,
             "network_mode": config.network_mode,
@@ -184,6 +187,24 @@ class ContainerManager:
         try:
             container = self.docker_client.containers.get(container_id)
             container.start()
+
+            # Verify container is actually running after start
+            for _ in range(5):
+                container.reload()
+                if container.status == "running":
+                    break
+                time.sleep(0.5)
+            else:
+                # Container failed to stay running - grab logs for diagnosis
+                try:
+                    logs = container.logs().decode("utf-8", errors="replace")[:500]
+                except Exception:
+                    logs = "(unable to retrieve logs)"
+                raise APIError(
+                    f"Container {container_id} exited immediately after start "
+                    f"(status: {container.status}). Logs: {logs}"
+                )
+
             logger.info(f"Started container {container_id}")
         except NotFound as e:
             logger.error(f"Container {container_id} not found")
@@ -291,13 +312,33 @@ class ContainerManager:
                     f"Container {container_id} is not running (status: {container.status})"
                 )
             
-            # Execute command
-            exec_result = container.exec_run(
-                cmd=command,
-                stdout=True,
-                stderr=True,
-                timeout=timeout
-            )
+            # Execute command with timeout using a thread wrapper
+            # (Docker SDK's exec_run does not support a timeout parameter)
+            exec_holder: Dict[str, Any] = {}
+
+            def _run_exec():
+                try:
+                    exec_holder["result"] = container.exec_run(
+                        cmd=command,
+                        stdout=True,
+                        stderr=True,
+                    )
+                except Exception as exc:
+                    exec_holder["error"] = exc
+
+            exec_thread = threading.Thread(target=_run_exec)
+            exec_thread.start()
+            exec_thread.join(timeout=timeout)
+
+            if exec_thread.is_alive():
+                raise APIError(
+                    f"Command timed out after {timeout} seconds in container {container_id}"
+                )
+
+            if "error" in exec_holder:
+                raise exec_holder["error"]
+
+            exec_result = exec_holder["result"]
             
             exit_code = exec_result.exit_code
             output = exec_result.output

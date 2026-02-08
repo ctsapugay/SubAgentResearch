@@ -1,10 +1,19 @@
-"""Tool executor for running tools within Docker containers."""
+"""Tool executor for running tools within Docker containers.
+
+Generates self-contained Python scripts that are executed inside containers.
+The scripts must NOT import any project modules (the ``src`` package is not
+available inside the container image).  All tool logic is therefore inlined
+in the generated scripts.
+"""
 
 import json
+import logging
 import sys
 from typing import Any, Dict, Optional, Protocol
 
 from src.tools.registry import ToolRegistry
+
+logger = logging.getLogger(__name__)
 
 
 class ContainerManagerProtocol(Protocol):
@@ -42,14 +51,13 @@ class ContainerToolExecutor:
     
     This class handles the serialization, execution, and deserialization
     of tool calls within isolated Docker containers.
+    
+    The generated scripts are fully self-contained — they do NOT depend on
+    the host project's ``src`` package being present inside the container.
     """
     
-    # Mapping of tool names to their class names for imports
-    TOOL_CLASS_MAP = {
-        "read_file": "ReadFileTool",
-        "write_file": "WriteFileTool",
-        "list_files": "ListFilesTool",
-    }
+    # Tools that are supported for in-container execution
+    SUPPORTED_TOOLS = {"read_file", "write_file", "list_files"}
     
     def __init__(
         self,
@@ -90,13 +98,13 @@ class ContainerToolExecutor:
             ValueError: If tool_name is not recognized
             RuntimeError: If tool execution fails or times out
         """
-        if tool_name not in self.TOOL_CLASS_MAP:
+        if tool_name not in self.SUPPORTED_TOOLS:
             raise ValueError(
                 f"Unknown tool: {tool_name}. "
-                f"Available tools: {list(self.TOOL_CLASS_MAP.keys())}"
+                f"Available tools: {sorted(self.SUPPORTED_TOOLS)}"
             )
         
-        # Generate Python script to execute the tool
+        # Generate self-contained Python script to execute the tool
         script = self._create_tool_script(tool_name, tool_args)
         
         # Execute script in container
@@ -110,12 +118,24 @@ class ContainerToolExecutor:
         # Deserialize and return result
         return self._deserialize_result(result)
     
+    # ------------------------------------------------------------------
+    # Script generators
+    # ------------------------------------------------------------------
+    # Each tool gets a self-contained script that only uses the Python
+    # standard library.  This is critical because the project's ``src``
+    # package is NOT installed inside the container image.
+    # ------------------------------------------------------------------
+
     def _create_tool_script(
         self,
         tool_name: str,
         tool_args: Dict[str, Any]
     ) -> str:
-        """Create Python script to execute a tool.
+        """Create a self-contained Python script to execute a tool.
+        
+        The generated script uses **only** the Python standard library so
+        it can run inside a bare ``python:3.x-slim`` container without any
+        additional dependencies.
         
         Args:
             tool_name: Name of the tool to execute
@@ -124,52 +144,140 @@ class ContainerToolExecutor:
         Returns:
             Python script as a string
         """
-        tool_class_name = self.TOOL_CLASS_MAP[tool_name]
-        
-        # Escape tool_args for safe inclusion in Python code
-        # Use json.dumps to safely serialize the arguments
-        tool_args_json = json.dumps(tool_args)
-        
-        script = f"""import json
-import sys
+        generator = {
+            "write_file": self._script_write_file,
+            "read_file": self._script_read_file,
+            "list_files": self._script_list_files,
+        }.get(tool_name)
+
+        if generator is None:
+            raise ValueError(
+                f"No script generator for tool: {tool_name}. "
+                f"Available tools: {sorted(self.SUPPORTED_TOOLS)}"
+            )
+
+        return generator(tool_args)
+
+    # --- individual script generators -----------------------------------
+
+    @staticmethod
+    def _script_write_file(tool_args: Dict[str, Any]) -> str:
+        """Generate a self-contained script that writes a file."""
+        args_json = json.dumps(tool_args)
+        return f"""import json, os, sys
 from pathlib import Path
 
-# Import tool class
-from src.tools.implementations.filesystem import {tool_class_name}
+BASE = Path("/workspace")
+args = json.loads({repr(args_json)})
 
-# Create tool instance with workspace path
-tool = {tool_class_name}(base_path="/workspace")
+file_path = args.get("file_path", "")
+content   = args.get("content", "")
 
-# Parse tool arguments from JSON
-tool_args = json.loads({repr(tool_args_json)})
+if not file_path or not isinstance(file_path, str):
+    print(json.dumps({{"success": False, "error": {{"error": "Missing or invalid file_path", "type": "ValueError", "traceback": ""}}}}))
+    sys.exit(0)
 
-# Execute tool
+if not isinstance(content, str):
+    print(json.dumps({{"success": False, "error": {{"error": "content must be a string", "type": "ValueError", "traceback": ""}}}}))
+    sys.exit(0)
+
+target = (BASE / file_path).resolve()
+
+# Prevent directory traversal outside /workspace
 try:
-    result = tool.execute(**tool_args)
-    
-    # Serialize result
-    # Handle different result types
-    if isinstance(result, (dict, list, str, int, float, bool, type(None))):
-        output = json.dumps({{"success": True, "result": result}})
-    else:
-        # For other types, convert to string
-        output = json.dumps({{"success": True, "result": str(result)}})
-        
-except Exception as e:
-    # Capture exception information
-    import traceback
-    error_info = {{
-        "error": str(e),
-        "type": type(e).__name__,
-        "traceback": traceback.format_exc()
-    }}
-    output = json.dumps({{"success": False, "error": error_info}})
+    target.relative_to(BASE)
+except ValueError:
+    print(json.dumps({{"success": False, "error": {{"error": f"Path {{file_path}} is outside sandbox /workspace", "type": "ValueError", "traceback": ""}}}}))
+    sys.exit(0)
 
-# Output result to stdout
-print(output)
+try:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with open(target, "w", encoding="utf-8") as f:
+        bytes_written = f.write(content)
+    print(json.dumps({{"success": True, "result": {{"success": True, "file_path": str(target), "bytes_written": bytes_written}}}}))
+except Exception as e:
+    import traceback as tb
+    print(json.dumps({{"success": False, "error": {{"error": str(e), "type": type(e).__name__, "traceback": tb.format_exc()}}}}))
+
 sys.stdout.flush()
 """
-        return script
+
+    @staticmethod
+    def _script_read_file(tool_args: Dict[str, Any]) -> str:
+        """Generate a self-contained script that reads a file."""
+        args_json = json.dumps(tool_args)
+        return f"""import json, sys
+from pathlib import Path
+
+BASE = Path("/workspace")
+args = json.loads({repr(args_json)})
+
+file_path = args.get("file_path", "")
+
+if not file_path or not isinstance(file_path, str):
+    print(json.dumps({{"success": False, "error": {{"error": "Missing or invalid file_path", "type": "ValueError", "traceback": ""}}}}))
+    sys.exit(0)
+
+target = (BASE / file_path).resolve()
+
+try:
+    target.relative_to(BASE)
+except ValueError:
+    print(json.dumps({{"success": False, "error": {{"error": f"Path {{file_path}} is outside sandbox /workspace", "type": "ValueError", "traceback": ""}}}}))
+    sys.exit(0)
+
+try:
+    if not target.exists():
+        raise FileNotFoundError(f"File not found: {{target}}")
+    if not target.is_file():
+        raise ValueError(f"Path is not a file: {{target}}")
+    with open(target, "r", encoding="utf-8") as f:
+        content = f.read()
+    print(json.dumps({{"success": True, "result": content}}))
+except Exception as e:
+    import traceback as tb
+    print(json.dumps({{"success": False, "error": {{"error": str(e), "type": type(e).__name__, "traceback": tb.format_exc()}}}}))
+
+sys.stdout.flush()
+"""
+
+    @staticmethod
+    def _script_list_files(tool_args: Dict[str, Any]) -> str:
+        """Generate a self-contained script that lists files in a directory."""
+        args_json = json.dumps(tool_args)
+        return f"""import json, sys
+from pathlib import Path
+
+BASE = Path("/workspace")
+args = json.loads({repr(args_json)})
+
+directory_path = args.get("directory_path", ".")
+
+if not isinstance(directory_path, str):
+    print(json.dumps({{"success": False, "error": {{"error": "directory_path must be a string", "type": "ValueError", "traceback": ""}}}}))
+    sys.exit(0)
+
+target = (BASE / directory_path).resolve()
+
+try:
+    target.relative_to(BASE)
+except ValueError:
+    print(json.dumps({{"success": False, "error": {{"error": f"Path {{directory_path}} is outside sandbox /workspace", "type": "ValueError", "traceback": ""}}}}))
+    sys.exit(0)
+
+try:
+    if not target.exists():
+        raise FileNotFoundError(f"Directory not found: {{target}}")
+    if not target.is_dir():
+        raise ValueError(f"Path is not a directory: {{target}}")
+    items = sorted(item.name for item in target.iterdir())
+    print(json.dumps({{"success": True, "result": items}}))
+except Exception as e:
+    import traceback as tb
+    print(json.dumps({{"success": False, "error": {{"error": str(e), "type": type(e).__name__, "traceback": tb.format_exc()}}}}))
+
+sys.stdout.flush()
+"""
     
     def _execute_script_in_container(
         self,
@@ -201,19 +309,25 @@ sys.stdout.flush()
             timeout=timeout
         )
         
-        # Check for execution errors
+        # Check for execution errors — include stdout/stderr so the real
+        # failure reason (e.g. ImportError inside the container) is visible.
+        stdout = result.get("stdout", "")
+        stderr = result.get("stderr", "")
+        
         if result.get("error"):
             raise RuntimeError(
-                f"Container execution error: {result['error']}"
+                f"Container execution error: {result['error']}\n"
+                f"stdout: {stdout}\n"
+                f"stderr: {stderr}"
             )
         
         # Check exit code
         exit_code = result.get("exit_code", -1)
         if exit_code != 0:
-            stderr = result.get("stderr", "")
             raise RuntimeError(
-                f"Tool execution failed with exit code {exit_code}. "
-                f"Error: {stderr}"
+                f"Tool execution failed with exit code {exit_code}.\n"
+                f"stdout: {stdout}\n"
+                f"stderr: {stderr}"
             )
         
         return result
@@ -269,22 +383,10 @@ sys.stdout.flush()
         # Return the actual result
         return output_data.get("result")
     
-    def _get_tool_class_name(self, tool_name: str) -> str:
-        """Get the class name for a tool.
+    def _get_supported_tools(self) -> list:
+        """Get list of supported tool names.
         
-        Args:
-            tool_name: Name of the tool
-            
         Returns:
-            Class name for the tool
-            
-        Raises:
-            ValueError: If tool_name is not recognized
+            Sorted list of supported tool names
         """
-        if tool_name not in self.TOOL_CLASS_MAP:
-            raise ValueError(
-                f"Unknown tool: {tool_name}. "
-                f"Available tools: {list(self.TOOL_CLASS_MAP.keys())}"
-            )
-        
-        return self.TOOL_CLASS_MAP[tool_name]
+        return sorted(self.SUPPORTED_TOOLS)

@@ -2,7 +2,9 @@
 
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
+
+import yaml
 
 from .skill_definition import SkillDefinition, Tool, ToolType
 
@@ -17,6 +19,12 @@ class SkillParser:
     def parse(self, skill_path: str) -> SkillDefinition:
         """
         Parse a SKILL.md file into a SkillDefinition.
+        
+        Supports two formats:
+        1. YAML frontmatter (real-world skills): name and description from
+           frontmatter, markdown body is the system prompt.
+        2. Heading-based (legacy/toy skills): name from # title, description
+           from ## Description, system prompt from ## System Prompt, etc.
         
         Args:
             skill_path: Path to the SKILL.md file
@@ -34,23 +42,42 @@ class SkillParser:
         
         content = path.read_text(encoding='utf-8')
         
-        # Extract skill name from title or filename
-        name = self._extract_name(content, path)
+        # Try frontmatter parsing first
+        frontmatter, body = self._parse_frontmatter(content)
         
-        # Extract description
-        description = self._extract_description(content)
+        if frontmatter:
+            # Frontmatter format: name and description from YAML, body is system prompt
+            name = frontmatter.get('name', self._extract_name(body, path))
+            description = frontmatter.get('description', '').strip() if isinstance(
+                frontmatter.get('description', ''), str
+            ) else str(frontmatter.get('description', '')).strip()
+            if not description:
+                description = self._extract_description(body)
+            system_prompt = body.strip()
+            if not system_prompt:
+                system_prompt = description
+        else:
+            # Legacy heading-based format (existing logic)
+            name = self._extract_name(content, path)
+            description = self._extract_description(content)
+            system_prompt = self._extract_system_prompt(content)
         
-        # Extract system prompt
-        system_prompt = self._extract_system_prompt(content)
+        # Tools: try heading-based extraction on body, fall back to content inference
+        tools = self._extract_tools(body if frontmatter else content)
         
-        # Extract tools
-        tools = self._extract_tools(content)
+        # Environment: try heading-based extraction on body
+        environment_requirements = self._extract_environment_requirements(
+            body if frontmatter else content
+        )
         
-        # Extract environment requirements
-        environment_requirements = self._extract_environment_requirements(content)
-        
-        # Extract metadata
+        # Metadata: include frontmatter extras
         metadata = self._extract_metadata(content, path)
+        if frontmatter:
+            metadata['format'] = 'frontmatter'
+            # Preserve any extra frontmatter fields (like license, disable-model-invocation, etc.)
+            for key, value in frontmatter.items():
+                if key not in ('name', 'description'):
+                    metadata[key] = value
         
         return SkillDefinition(
             name=name,
@@ -60,6 +87,40 @@ class SkillParser:
             environment_requirements=environment_requirements,
             metadata=metadata
         )
+    
+    def _parse_frontmatter(self, content: str) -> Tuple[Optional[Dict[str, Any]], str]:
+        """Parse YAML frontmatter from content if present.
+        
+        Detects content that starts with a ``---`` line, extracts the YAML block
+        up to the closing ``---``, and returns the parsed dict plus the remaining
+        body text.
+        
+        Args:
+            content: Raw file content.
+            
+        Returns:
+            Tuple of (frontmatter_dict, body_content).
+            If no frontmatter is found, returns (None, content).
+        """
+        stripped = content.strip()
+        if not stripped.startswith('---'):
+            return (None, content)
+        
+        # Find the closing --- (the opening --- is at position 0)
+        end_index = stripped.find('---', 3)
+        if end_index == -1:
+            return (None, content)
+        
+        yaml_text = stripped[3:end_index].strip()
+        body = stripped[end_index + 3:]
+        
+        try:
+            frontmatter = yaml.safe_load(yaml_text)
+            if not isinstance(frontmatter, dict):
+                return (None, content)
+            return (frontmatter, body)
+        except yaml.YAMLError:
+            return (None, content)
     
     def _extract_name(self, content: str, path: Path) -> str:
         """Extract skill name from markdown title or filename."""

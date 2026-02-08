@@ -171,6 +171,7 @@ class TestContainerManager:
         """Test successful container start."""
         mock_client = MagicMock()
         mock_container = MagicMock()
+        mock_container.status = "running"
         mock_client.containers.get.return_value = mock_container
         
         manager = ContainerManager(docker_client=mock_client)
@@ -231,8 +232,7 @@ class TestContainerManager:
     
     def test_remove_container_not_found(self):
         """Test removing a non-existent container (should not raise error)."""
-        # Create a mock NotFound exception
-        NotFound = type('NotFound', (Exception,), {})
+        from docker.errors import NotFound
         
         mock_client = MagicMock()
         mock_client.containers.get.side_effect = NotFound("Container not found")
@@ -268,7 +268,8 @@ class TestContainerManager:
         mock_container.exec_run.assert_called_once()
         call_args = mock_container.exec_run.call_args
         assert call_args[1]["cmd"] == ["python", "-c", "print('Hello, World!')"]
-        assert call_args[1]["timeout"] == 30
+        assert call_args[1]["stdout"] is True
+        assert call_args[1]["stderr"] is True
     
     def test_execute_in_container_non_zero_exit(self):
         """Test command execution with non-zero exit code."""

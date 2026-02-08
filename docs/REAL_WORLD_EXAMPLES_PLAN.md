@@ -427,9 +427,9 @@ Present the draft as a reviewable version:
 Simply copy the content from the "Full content" blocks above into each file.
 
 **Acceptance criteria**:
-- [ ] All 3 files exist in `examples/real_world/`
-- [ ] Each file has valid YAML frontmatter (starts with `---`, has `name` and `description`, ends with `---`)
-- [ ] Each file has a markdown body after the frontmatter
+- [x] All 3 files exist in `examples/real_world/`
+- [x] Each file has valid YAML frontmatter (starts with `---`, has `name` and `description`, ends with `---`)
+- [x] Each file has a markdown body after the frontmatter
 
 ---
 

@@ -122,7 +122,7 @@ class DockerImageBuilder:
             
         except BuildError as e:
             logger.error(f"Failed to build image {tag}: {e}")
-            raise BuildError(f"Failed to build image: {e}") from e
+            raise BuildError(f"Failed to build image: {e}", e.build_log) from e
         except APIError as e:
             logger.error(f"Docker API error while building image {tag}: {e}")
             raise APIError(f"Docker API error: {e}") from e
@@ -182,7 +182,10 @@ class DockerImageBuilder:
             "",
             "# Set environment variables",
             "ENV PYTHONUNBUFFERED=1",
-            "ENV PYTHONPATH=/workspace"
+            "ENV PYTHONPATH=/workspace",
+            "",
+            "# Keep container alive for exec_run commands",
+            'CMD ["sleep", "infinity"]'
         ])
         
         return "\n".join(lines)

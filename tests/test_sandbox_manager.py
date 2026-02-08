@@ -68,7 +68,7 @@ class TestSandboxManager:
         assert manager.base_path == Path(temp_base_path).resolve()
         assert manager.environment_builder is not None
         assert manager.tool_registry is not None
-        assert manager.isolation_mode == "directory"
+        assert manager.isolation_mode == "container"
         assert len(manager.active_sandboxes) == 0
     
     def test_init_with_isolation_mode(self, temp_base_path):
@@ -281,7 +281,7 @@ class TestSandboxManager:
         assert "tools" in info
         assert "status" in info
         assert "isolation_mode" in info
-        assert info["isolation_mode"] == "directory"
+        assert info["isolation_mode"] == "container"
         
         # Check types
         assert isinstance(info["tools"], list)

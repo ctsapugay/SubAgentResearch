@@ -111,7 +111,7 @@ class TestContainerConfig:
         assert isinstance(config.resource_limits, ResourceLimits)
         assert config.network_mode == "none"
         assert config.read_only is True
-        assert config.tmpfs == ["/tmp", "/workspace/tmp"]
+        assert config.tmpfs == ["/tmp"]
         assert config.environment_vars == {}
         assert config.volumes == {}
         assert config.working_dir == "/workspace"
@@ -236,7 +236,7 @@ class TestContainerConfig:
         assert docker_dict["working_dir"] == "/workspace"
         assert docker_dict["network_mode"] == "none"
         assert docker_dict["read_only"] is True
-        assert docker_dict["tmpfs"] == ["/tmp", "/workspace/tmp"]
+        assert docker_dict["tmpfs"] == ["/tmp"]
         assert docker_dict["cap_drop"] == ["ALL"]
         assert docker_dict["security_opt"] == ["no-new-privileges:true"]
     

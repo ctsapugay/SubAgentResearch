@@ -66,26 +66,31 @@ class TestContainerToolExecutor:
         tool_args = {"file_path": "test.txt"}
         script = executor._create_tool_script("read_file", tool_args)
         
-        assert "from src.tools.implementations.filesystem import ReadFileTool" in script
-        assert "ReadFileTool(base_path=\"/workspace\")" in script
+        # Script should be self-contained — no project imports
+        assert "from src." not in script
         assert "json.loads" in script
-        assert "tool.execute(**tool_args)" in script
         assert "json.dumps" in script
+        assert "/workspace" in script
+        assert "file_path" in script
     
     def test_create_tool_script_write_file(self, executor):
         """Test script generation for write_file tool."""
         tool_args = {"file_path": "test.txt", "content": "Hello"}
         script = executor._create_tool_script("write_file", tool_args)
         
-        assert "WriteFileTool" in script
-        assert "file_path" in script or json.dumps(tool_args) in script
+        # Script should be self-contained — no project imports
+        assert "from src." not in script
+        assert "file_path" in script
+        assert "/workspace" in script
     
     def test_create_tool_script_list_files(self, executor):
         """Test script generation for list_files tool."""
         tool_args = {"directory_path": "."}
         script = executor._create_tool_script("list_files", tool_args)
         
-        assert "ListFilesTool" in script
+        # Script should be self-contained — no project imports
+        assert "from src." not in script
+        assert "/workspace" in script
     
     def test_create_tool_script_with_complex_args(self, executor):
         """Test script generation with complex arguments."""
@@ -328,16 +333,17 @@ class TestContainerToolExecutor:
         with pytest.raises(RuntimeError, match="Container execution error"):
             executor.execute_tool("container-123", "read_file", tool_args, timeout=5)
     
-    def test_get_tool_class_name(self, executor):
-        """Test getting tool class name."""
-        assert executor._get_tool_class_name("read_file") == "ReadFileTool"
-        assert executor._get_tool_class_name("write_file") == "WriteFileTool"
-        assert executor._get_tool_class_name("list_files") == "ListFilesTool"
+    def test_get_supported_tools(self, executor):
+        """Test getting supported tool names."""
+        tools = executor._get_supported_tools()
+        assert "read_file" in tools
+        assert "write_file" in tools
+        assert "list_files" in tools
     
-    def test_get_tool_class_name_unknown(self, executor):
-        """Test getting class name for unknown tool."""
-        with pytest.raises(ValueError, match="Unknown tool"):
-            executor._get_tool_class_name("unknown_tool")
+    def test_create_tool_script_unknown(self, executor):
+        """Test script generation for unknown tool."""
+        with pytest.raises(ValueError, match="No script generator for tool"):
+            executor._create_tool_script("unknown_tool", {})
     
     def test_script_handles_special_characters(self, executor):
         """Test script generation handles special characters in arguments."""
@@ -348,7 +354,8 @@ class TestContainerToolExecutor:
         
         script = executor._create_tool_script("write_file", tool_args)
         
-        # Script should be valid Python
+        # Script should be valid Python (no project imports)
+        assert "from src." not in script
         assert "json.loads" in script
         # Arguments should be properly escaped via JSON
         assert json.dumps(tool_args) in script or "file_path" in script

@@ -136,7 +136,7 @@ class ContainerConfig:
     resource_limits: ResourceLimits = field(default_factory=ResourceLimits)
     network_mode: str = "none"  # "none" | "bridge" | "host"
     read_only: bool = True
-    tmpfs: List[str] = field(default_factory=lambda: ["/tmp", "/workspace/tmp"])
+    tmpfs: List[str] = field(default_factory=lambda: ["/tmp"])
     environment_vars: Dict[str, str] = field(default_factory=dict)
     volumes: Dict[str, Dict[str, str]] = field(default_factory=dict)
     working_dir: str = "/workspace"

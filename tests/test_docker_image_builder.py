@@ -246,11 +246,11 @@ class TestDockerImageBuilder:
     
     def test_build_image_from_skill_build_error(self):
         """Test image building when build fails."""
-        BuildError = type('BuildError', (Exception,), {})
+        from docker.errors import BuildError
         
         mock_client = MagicMock()
         mock_client.images.get.side_effect = Exception("Image not found")
-        mock_client.images.build.side_effect = BuildError("Build failed")
+        mock_client.images.build.side_effect = BuildError("Build failed", [])
         
         builder = DockerImageBuilder(docker_client=mock_client)
         skill = create_mock_skill()
