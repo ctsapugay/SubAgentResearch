@@ -20,8 +20,8 @@ This guide helps you migrate from directory-based sandbox isolation to container
 
 The Skill-to-Sandbox Pipeline supports two isolation modes:
 
-- **Directory Mode** (default): Uses directory separation and Python virtual environments
-- **Container Mode**: Uses Docker containers for OS-level isolation
+- **Container Mode** (default): Uses Docker containers for OS-level isolation
+- **Directory Mode**: Uses directory separation and Python virtual environments
 
 Both modes provide the same API, so migration is straightforward. This guide walks you through the process.
 

@@ -97,7 +97,7 @@ A sandbox is an isolated, controlled environment where:
 
 - Python 3.11 or higher
 - pip or uv package manager
-- Docker (optional, for container-based sandbox isolation)
+- Docker (required for default container-based sandbox isolation)
   - Docker Desktop for macOS/Windows: https://www.docker.com/products/docker-desktop
   - Docker Engine for Linux: https://docs.docker.com/engine/install/
 
@@ -118,7 +118,7 @@ Or using uv:
 uv pip install -r requirements.txt
 ```
 
-**Note**: If you plan to use Docker container support (optional), ensure Docker is installed and running:
+3. Ensure Docker is installed and running (required for default container mode):
 ```bash
 # Verify Docker installation
 docker --version
@@ -127,7 +127,7 @@ docker --version
 docker ps
 ```
 
-If Docker is not available, the system will use directory-based isolation (default).
+**Note**: The system uses container-based isolation by default. If you need directory-based isolation instead, explicitly specify `isolation_mode="directory"` when creating a SandboxBuilder.
 
 ## Usage
 
@@ -135,25 +135,25 @@ If Docker is not available, the system will use directory-based isolation (defau
 
 The system supports two isolation modes:
 
-1. **Directory-based isolation** (default): Uses directory separation and Python virtual environments
-   - Faster startup time
-   - Lower resource overhead
-   - Suitable for trusted code
-   - No Docker required
-
-2. **Container-based isolation**: Uses Docker containers for stronger isolation
+1. **Container-based isolation** (default): Uses Docker containers for stronger isolation
    - Enhanced security with OS-level isolation
    - Resource limits (CPU, memory, PIDs)
    - Network isolation
    - Suitable for untrusted code
    - Requires Docker
 
-### Basic Example (Directory Mode)
+2. **Directory-based isolation**: Uses directory separation and Python virtual environments
+   - Faster startup time
+   - Lower resource overhead
+   - Suitable for trusted code
+   - No Docker required
+
+### Basic Example (Container Mode - Default)
 
 ```python
 from src.sandbox_builder import SandboxBuilder
 
-# Initialize the builder
+# Initialize the builder (uses container mode by default)
 builder = SandboxBuilder()
 
 # Build a sandbox from a skill file
@@ -238,13 +238,14 @@ builder.cleanup(sandbox1)
 builder.cleanup(sandbox2)
 ```
 
-### Container Mode Example
+### Container Mode Example (Custom Configuration)
 
 ```python
 from src.sandbox_builder import SandboxBuilder
 from src.sandbox.container_config import ContainerConfig, ResourceLimits
 
-# Initialize builder with container isolation
+# Initialize builder with custom container configuration
+# (Container mode is the default, but you can customize it)
 config = ContainerConfig(
     base_image="python:3.11-slim",
     resource_limits=ResourceLimits(
@@ -257,8 +258,7 @@ config = ContainerConfig(
 )
 
 builder = SandboxBuilder(
-    isolation_mode="container",
-    container_config=config
+    container_config=config  # isolation_mode="container" is the default
 )
 
 # Build sandbox (creates Docker container)
@@ -441,13 +441,7 @@ When you call `execute_in_sandbox()`:
 
 ## Security & Isolation
 
-### Directory Mode
-- **Path Isolation**: All file operations are restricted to the sandbox workspace
-- **Separate Environments**: Each sandbox has its own directory and virtual environment
-- **No System Access**: Tools cannot access files outside the sandbox
-- **Cleanup**: Sandboxes can be completely removed when done
-
-### Container Mode
+### Container Mode (Default)
 - **OS-Level Isolation**: Containers provide process and filesystem isolation
 - **Resource Limits**: CPU, memory, and process limits enforced by Docker
 - **Network Isolation**: Containers can run with no network access (`network_mode="none"`)
@@ -455,6 +449,12 @@ When you call `execute_in_sandbox()`:
 - **Capability Dropping**: Containers run with minimal Linux capabilities
 - **Non-Root User**: Containers run as non-root user by default
 - **Security Options**: Additional hardening options available (seccomp, AppArmor)
+
+### Directory Mode
+- **Path Isolation**: All file operations are restricted to the sandbox workspace
+- **Separate Environments**: Each sandbox has its own directory and virtual environment
+- **No System Access**: Tools cannot access files outside the sandbox
+- **Cleanup**: Sandboxes can be completely removed when done
 
 See [docs/SECURITY.md](docs/SECURITY.md) for detailed security documentation.
 

@@ -19,21 +19,21 @@ class SandboxBuilder:
     - Managing sandbox lifecycle
     
     Supports two isolation modes:
-    - "directory": Directory-based isolation with virtual environments (default)
-    - "container": Docker container-based isolation with stronger security
+    - "container": Docker container-based isolation with stronger security (default)
+    - "directory": Directory-based isolation with virtual environments
     """
     
     def __init__(
         self,
         sandbox_base_path: str = "./sandboxes",
-        isolation_mode: str = "directory",
+        isolation_mode: str = "container",
         container_config: Optional[ContainerConfig] = None
     ):
         """Initialize the sandbox builder.
         
         Args:
             sandbox_base_path: Base directory where sandboxes will be created
-            isolation_mode: Isolation method ("directory" or "container")
+            isolation_mode: Isolation method ("container" or "directory", defaults to "container")
             container_config: Configuration for container mode (optional, uses defaults if not provided)
         
         Raises:

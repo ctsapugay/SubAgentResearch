@@ -23,22 +23,22 @@ class SandboxManager:
     and provides tool execution within isolated environments.
     
     Supports two isolation modes:
-    - "directory": Directory-based isolation with virtual environments (default)
-    - "container": Docker container-based isolation with stronger security
+    - "container": Docker container-based isolation with stronger security (default)
+    - "directory": Directory-based isolation with virtual environments
     """
     
     def __init__(
         self,
         base_path: str = "./sandboxes",
-        isolation_mode: str = "directory",
+        isolation_mode: str = "container",
         container_config: Optional[ContainerConfig] = None
     ):
         """Initialize the sandbox manager.
         
         Args:
             base_path: Base directory where sandboxes will be created
-            isolation_mode: Isolation method ("directory" or "container")
-            container_config: Configuration for container mode (required if isolation_mode="container")
+            isolation_mode: Isolation method ("container" or "directory", defaults to "container")
+            container_config: Configuration for container mode (optional, uses defaults if not provided)
         
         Raises:
             ValueError: If isolation_mode is invalid or container_config is missing for container mode
@@ -205,7 +205,7 @@ class SandboxManager:
             "workspace_path": str(sandbox_info["workspace_path"]),
             "tools": list(sandbox_info["tools"].keys()),
             "status": sandbox_info["status"],
-            "isolation_mode": sandbox_info.get("isolation_mode", "directory"),
+            "isolation_mode": sandbox_info.get("isolation_mode", "container"),
         }
         
         # Add container_id if in container mode
