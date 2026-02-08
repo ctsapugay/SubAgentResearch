@@ -426,6 +426,8 @@ Present the draft as a reviewable version:
 
 Simply copy the content from the "Full content" blocks above into each file.
 
+**Status**: ✅ Complete
+
 **Acceptance criteria**:
 - [x] All 3 files exist in `examples/real_world/`
 - [x] Each file has valid YAML frontmatter (starts with `---`, has `name` and `description`, ends with `---`)
@@ -538,14 +540,16 @@ Simply copy the content from the "Full content" blocks above into each file.
 
 **Important**: The existing heading-based parsing logic (`_extract_name`, `_extract_description`, `_extract_system_prompt`, `_extract_tools`, `_extract_environment_requirements`) must remain unchanged so existing toy skills and tests still pass.
 
+**Status**: ✅ Complete
+
 **Acceptance criteria**:
-- [ ] `_parse_frontmatter()` correctly extracts YAML frontmatter and body
-- [ ] `_parse_frontmatter()` returns `(None, content)` for files without frontmatter
-- [ ] `parse()` uses frontmatter `name` and `description` when available
-- [ ] `parse()` uses the body (everything after frontmatter) as the `system_prompt`
-- [ ] Multiline YAML values (using `|` or `>`) are handled correctly (the deep-research skill uses `|`)
-- [ ] Extra frontmatter fields (like `license`, `disable-model-invocation`) are stored in `metadata`
-- [ ] All existing tests in `tests/test_skill_parser.py` still pass (backward compatibility)
+- [x] `_parse_frontmatter()` correctly extracts YAML frontmatter and body
+- [x] `_parse_frontmatter()` returns `(None, content)` for files without frontmatter
+- [x] `parse()` uses frontmatter `name` and `description` when available
+- [x] `parse()` uses the body (everything after frontmatter) as the `system_prompt`
+- [x] Multiline YAML values (using `|` or `>`) are handled correctly (the deep-research skill uses `|`)
+- [x] Extra frontmatter fields (like `license`, `disable-model-invocation`) are stored in `metadata`
+- [x] All existing tests in `tests/test_skill_parser.py` still pass (backward compatibility)
 
 ---
 
@@ -584,10 +588,12 @@ Simply copy the content from the "Full content" blocks above into each file.
    - `"research reports"` is in `description`
    - `system_prompt` contains `"Core Workflow"` and `"Evidence Collection"`
 
+**Status**: ✅ Complete
+
 **Acceptance criteria**:
-- [ ] All 9 new tests pass
-- [ ] All pre-existing tests in the file still pass
-- [ ] `pytest tests/test_skill_parser.py` reports 0 failures
+- [x] All 9 new tests pass
+- [x] All pre-existing tests in the file still pass
+- [x] `pytest tests/test_skill_parser.py` reports 0 failures
 
 ---
 
@@ -739,13 +745,17 @@ if __name__ == "__main__":
     main()
 ```
 
+**Status**: ✅ Complete
+
 **Acceptance criteria**:
-- [ ] Script runs without errors: `python examples/run_real_world_examples.py`
-- [ ] All 3 skills parse successfully (name, description, system_prompt all populated)
-- [ ] All 3 skills produce working sandboxes
-- [ ] Filesystem tools (write, read, list) execute successfully in each sandbox
-- [ ] Cleanup completes without errors
-- [ ] Script prints a summary showing all 3 skills as PASS
+- [x] Script runs without errors: `python examples/run_real_world_examples.py`
+- [x] All 3 skills parse successfully (name, description, system_prompt all populated)
+- [x] All 3 skills produce working sandboxes
+- [x] Filesystem tools (write, read, list) execute successfully in each sandbox
+- [x] Cleanup completes without errors
+- [x] Script prints a summary showing all 3 skills as PASS
+
+**Note**: Filesystem tools work because `SandboxManager` was updated to always include default registered tools in every sandbox. This was necessary because real-world skills don't declare tools explicitly — they rely on the host platform to provide them. Our pipeline now mirrors this behavior.
 
 ---
 
@@ -753,11 +763,13 @@ if __name__ == "__main__":
 
 **Command**: `pytest tests/ -v`
 
+**Status**: ✅ Complete
+
 **Acceptance criteria**:
-- [ ] All pre-existing tests pass (the heading-based parsing tests, tool tests, sandbox tests, etc.)
-- [ ] All new frontmatter parsing tests pass
-- [ ] No new warnings or deprecation issues introduced
-- [ ] `python examples/run_real_world_examples.py` runs successfully
+- [x] All pre-existing tests pass (the heading-based parsing tests, tool tests, sandbox tests, etc.)
+- [x] All new frontmatter parsing tests pass
+- [x] No new warnings or deprecation issues introduced
+- [x] `python examples/run_real_world_examples.py` runs successfully
 
 ---
 

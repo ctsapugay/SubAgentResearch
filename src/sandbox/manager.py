@@ -138,6 +138,12 @@ class SandboxManager:
                 # For container mode, tools are executed via container executor
                 # Store tool names but not instances
                 tools = {tool_name: None for tool_name in skill.get_tool_names()}
+                
+                # Always include default registered tools so sandboxes have
+                # base tools even when skills don't explicitly declare them
+                for default_tool_name in self.tool_registry.list_tools():
+                    if default_tool_name not in tools:
+                        tools[default_tool_name] = None
             else:
                 # Use directory-based environment (existing code)
                 sandbox_path = self.environment_builder.create_environment(
@@ -159,6 +165,17 @@ class SandboxManager:
                         # Tool not found in registry - skip it
                         # Could log a warning here in the future
                         pass
+                
+                # Always include default registered tools so sandboxes have
+                # base tools even when skills don't explicitly declare them
+                for default_tool_name in self.tool_registry.list_tools():
+                    if default_tool_name not in tools:
+                        tool_instance = self.tool_registry.get_tool(
+                            default_tool_name,
+                            base_path=str(workspace_path)
+                        )
+                        if tool_instance:
+                            tools[default_tool_name] = tool_instance
             
             # Store sandbox info
             sandbox_info = {

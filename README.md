@@ -328,20 +328,31 @@ cleaned = resource_manager.cleanup_exceeded_containers(
 
 ## Skill File Format
 
-Skills are defined in Markdown files (SKILL.md). The parser looks for:
+The parser supports two formats:
 
-### Required Sections
+### Format 1: YAML Frontmatter (Real-World Skills)
 
-- **Title**: First `#` heading becomes the skill name
-- **Description**: First paragraph or `## Description` section
-- **System Prompt**: `## System Prompt` or `## Instructions` section
+This is the format used by Cursor, Anthropic Claude Code, and community skill repositories. Name and description are in YAML frontmatter; the markdown body is the system prompt. Tools are provided automatically by the sandbox.
 
-### Optional Sections
+```markdown
+---
+name: frontend-design
+description: Create distinctive, production-grade frontend interfaces with high design quality.
+license: Complete terms in LICENSE.txt
+---
 
-- **Tools**: `## Tools` section listing available tools
-- **Requirements**: `## Requirements` or `## Environment` section
+This skill guides creation of distinctive, production-grade frontend interfaces.
 
-### Example Skill File
+## Design Thinking
+
+Before coding, understand the context and commit to a BOLD aesthetic direction...
+```
+
+See `examples/real_world/` for 3 complete real-world skills in this format.
+
+### Format 2: Heading-Based (Legacy)
+
+Sections are identified by `##` headings.
 
 ```markdown
 # Web Research Assistant
@@ -366,6 +377,10 @@ You are a web research assistant. Your role is to:
 - requests
 - beautifulsoup4
 ```
+
+### Default Tools
+
+Every sandbox automatically receives the default filesystem tools (`read_file`, `write_file`, `list_files`), regardless of whether the skill explicitly declares them. This mirrors how real platforms like Cursor and Claude Code provide base tools to every agent.
 
 ## Available Tools
 
@@ -487,7 +502,8 @@ Subagent Research/
 │   │       └── codebase_search.py # Code search (future)
 │   └── sandbox_builder.py         # Main interface
 ├── tests/                          # Test files
-├── examples/                       # Example skills
+├── examples/                       # Example skills and runner scripts
+│   └── real_world/                 # Real-world skills (Cursor, Anthropic, community)
 ├── sandboxes/                      # Created sandboxes (auto-generated)
 ├── requirements.txt
 └── README.md
