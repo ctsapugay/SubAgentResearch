@@ -1,17 +1,22 @@
 defmodule SkillToSandboxWeb.PipelineLive.Show do
   @moduledoc """
-  Pipeline run status view with step indicator and spec review UI.
+  Pipeline run status view with real-time updates via PubSub.
 
-  When the pipeline reaches the "reviewing" state (Phase 3), this page
-  displays the LLM-generated sandbox specification with editable fields.
-  The user can approve the spec to proceed or re-analyze with notes.
+  Subscribes to `"pipeline:<run_id>"` PubSub topic and receives
+  `{:pipeline_update, payload}` messages from the Pipeline Runner
+  GenServer, triggering LiveView re-renders for real-time progress.
+
+  When the pipeline reaches the "reviewing" state, this page displays
+  the LLM-generated sandbox specification with editable fields.
+  The user can approve the spec to proceed with Docker build, or
+  request re-analysis.
   """
   use SkillToSandboxWeb, :live_view
 
   alias SkillToSandbox.Skills
   alias SkillToSandbox.Pipelines
   alias SkillToSandbox.Analysis
-  alias SkillToSandbox.Analysis.Analyzer
+  alias SkillToSandbox.Pipeline.Runner
 
   @steps [
     {1, "Parse", "hero-document-text-micro"},
@@ -30,6 +35,11 @@ defmodule SkillToSandboxWeb.PipelineLive.Show do
     # If a specific run is requested via ?run=ID, load it with its spec
     {active_run, spec} = load_active_run(params, runs)
 
+    # Subscribe to PubSub for real-time updates
+    if active_run && connected?(socket) do
+      Phoenix.PubSub.subscribe(SkillToSandbox.PubSub, "pipeline:#{active_run.id}")
+    end
+
     socket =
       socket
       |> assign(:page_title, "Pipeline — #{skill.name}")
@@ -40,9 +50,60 @@ defmodule SkillToSandboxWeb.PipelineLive.Show do
       |> assign(:steps, @steps)
       |> assign(:re_analyzing, false)
       |> assign(:approving, false)
+      |> assign(:building, active_run && active_run.status in ["building", "configuring"])
       |> assign_spec_form(spec)
 
     {:ok, socket}
+  end
+
+  # -- PubSub handler: real-time pipeline updates --
+
+  @impl true
+  def handle_info({:pipeline_update, payload}, socket) do
+    # Reload the run and spec from DB for fresh data
+    run = Pipelines.get_run!(payload.run_id)
+    runs = Pipelines.runs_for_skill(socket.assigns.skill.id)
+
+    spec =
+      if payload.sandbox_spec_id do
+        Analysis.get_spec!(payload.sandbox_spec_id)
+      else
+        socket.assigns.spec
+      end
+
+    socket =
+      socket
+      |> assign(:active_run, run)
+      |> assign(:runs, runs)
+      |> assign(:spec, spec)
+      |> assign(:re_analyzing, false)
+      |> assign(:approving, false)
+      |> assign(:building, run.status in ["building", "configuring"])
+      |> assign_spec_form(spec)
+
+    # Flash messages for key transitions
+    socket =
+      case payload.status do
+        :reviewing ->
+          put_flash(socket, :info, "Analysis complete! Review the specification below.")
+
+        :building ->
+          put_flash(socket, :info, "Building Docker container... this may take a few minutes.")
+
+        :configuring ->
+          put_flash(socket, :info, "Verifying sandbox tools...")
+
+        :ready ->
+          put_flash(socket, :info, "Sandbox is ready! View it in the Sandboxes section.")
+
+        :failed ->
+          put_flash(socket, :error, payload.error || "Pipeline failed.")
+
+        _ ->
+          socket
+      end
+
+    {:noreply, socket}
   end
 
   # -- Events --
@@ -68,55 +129,46 @@ defmodule SkillToSandboxWeb.PipelineLive.Show do
 
   @impl true
   def handle_event("approve_spec", _params, socket) do
-    spec = socket.assigns.spec
     run = socket.assigns.active_run
-
     socket = assign(socket, :approving, true)
 
-    case Analysis.approve_spec(spec) do
-      {:ok, approved_spec} ->
-        # Update pipeline run to building state (Phase 4+ will handle actual build)
-        {:ok, updated_run} =
-          Pipelines.update_run(run, %{
-            status: "building",
-            current_step: 4
-          })
+    # Delegate to the Runner GenServer
+    Runner.approve_spec(run.id)
 
-        {:noreply,
-         socket
-         |> assign(:spec, approved_spec)
-         |> assign(:active_run, updated_run)
-         |> assign(:approving, false)
-         |> put_flash(
-           :info,
-           "Spec approved! Docker build will start when Phase 4 is implemented."
-         )}
-
-      {:error, _changeset} ->
-        {:noreply,
-         socket
-         |> assign(:approving, false)
-         |> put_flash(:error, "Failed to approve spec.")}
-    end
+    {:noreply,
+     socket
+     |> put_flash(:info, "Spec approved! Starting Docker build...")}
   end
 
   @impl true
   def handle_event("re_analyze", _params, socket) do
-    skill = socket.assigns.skill
     run = socket.assigns.active_run
-
     socket = assign(socket, :re_analyzing, true)
 
-    # Update run back to analyzing state
-    {:ok, updated_run} =
-      Pipelines.update_run(run, %{status: "analyzing", current_step: 2})
-
-    send(self(), {:run_re_analysis, skill, updated_run})
+    # Delegate to the Runner GenServer
+    Runner.re_analyze(run.id)
 
     {:noreply,
      socket
-     |> assign(:active_run, updated_run)
      |> put_flash(:info, "Re-analyzing with LLM...")}
+  end
+
+  @impl true
+  def handle_event("retry", _params, socket) do
+    run = socket.assigns.active_run
+
+    if Runner.alive?(run.id) do
+      Runner.retry(run.id)
+    else
+      # Runner process is gone (e.g., after app restart) -- start a fresh pipeline
+      alias SkillToSandbox.Pipeline.Supervisor, as: PipelineSupervisor
+      PipelineSupervisor.resume_pipeline(run.id, socket.assigns.skill.id)
+      Runner.retry(run.id)
+    end
+
+    {:noreply,
+     socket
+     |> put_flash(:info, "Retrying pipeline...")}
   end
 
   @impl true
@@ -225,45 +277,6 @@ defmodule SkillToSandboxWeb.PipelineLive.Show do
     end
   end
 
-  # -- Async handlers --
-
-  @impl true
-  def handle_info({:run_re_analysis, skill, run}, socket) do
-    case Analyzer.analyze(skill) do
-      {:ok, new_spec} ->
-        {:ok, updated_run} =
-          Pipelines.update_run(run, %{
-            status: "reviewing",
-            current_step: 3,
-            sandbox_spec_id: new_spec.id
-          })
-
-        {:noreply,
-         socket
-         |> assign(:spec, new_spec)
-         |> assign(:active_run, updated_run)
-         |> assign(:re_analyzing, false)
-         |> assign_spec_form(new_spec)
-         |> put_flash(:info, "Re-analysis complete! Review the updated specification.")}
-
-      {:error, reason} ->
-        error_msg = if is_binary(reason), do: reason, else: inspect(reason)
-
-        {:ok, updated_run} =
-          Pipelines.update_run(run, %{
-            status: "failed",
-            error_message: error_msg,
-            completed_at: DateTime.utc_now()
-          })
-
-        {:noreply,
-         socket
-         |> assign(:active_run, updated_run)
-         |> assign(:re_analyzing, false)
-         |> put_flash(:error, "Re-analysis failed: #{error_msg}")}
-    end
-  end
-
   # -- Render --
 
   @impl true
@@ -326,10 +339,23 @@ defmodule SkillToSandboxWeb.PipelineLive.Show do
           status_glow(@active_run.status)
         ]}>
           <span class={["size-2.5 rounded-full", run_dot(@active_run.status)]} />
+          <%= if animating?(@active_run.status) do %>
+            <.icon name="hero-arrow-path" class="size-4 animate-spin text-base-content/30" />
+          <% end %>
           <span class="text-sm font-medium text-base-content/70">
             {status_label(@active_run.status)}
           </span>
-          <%= if @active_run.error_message do %>
+          <%!-- Step Timings --%>
+          <%= if @active_run.step_timings && @active_run.step_timings != %{} do %>
+            <div class="ml-auto flex gap-3">
+              <%= for {step, ms} <- @active_run.step_timings do %>
+                <span class="text-[10px] font-mono text-base-content/25">
+                  {step}: {format_duration(ms)}
+                </span>
+              <% end %>
+            </div>
+          <% end %>
+          <%= if @active_run.error_message && @active_run.step_timings in [nil, %{}] do %>
             <span class="text-xs text-error/70 ml-auto max-w-md truncate">
               {@active_run.error_message}
             </span>
@@ -342,9 +368,62 @@ defmodule SkillToSandboxWeb.PipelineLive.Show do
         {render_spec_review(assigns)}
       <% end %>
 
-      <%!-- Approved / Building state --%>
+      <%!-- Building / Configuring state --%>
+      <%= if @building do %>
+        <div class="glass-panel p-6">
+          <div class="flex items-center gap-4">
+            <div class="size-12 rounded-xl bg-warning/15 flex items-center justify-center shrink-0">
+              <.icon name="hero-arrow-path" class="size-6 text-warning animate-spin" />
+            </div>
+            <div>
+              <h3 class="text-sm font-semibold text-base-content">
+                <%= if @active_run.status == "building" do %>
+                  Building Docker Container
+                <% else %>
+                  Verifying Sandbox Tools
+                <% end %>
+              </h3>
+              <p class="text-sm text-base-content/50 mt-1">
+                <%= if @active_run.status == "building" do %>
+                  Docker is building the sandbox image. This may take a few minutes depending on the number of dependencies...
+                <% else %>
+                  Checking that the container is running and tools are accessible...
+                <% end %>
+              </p>
+            </div>
+          </div>
+        </div>
+      <% end %>
+
+      <%!-- Approved / Building state: spec summary --%>
       <%= if @spec && approved_or_later?(@active_run) do %>
         {render_spec_summary(assigns)}
+      <% end %>
+
+      <%!-- Ready state --%>
+      <%= if @active_run && @active_run.status == "ready" do %>
+        <div class="glass-panel p-6 glow-primary">
+          <div class="flex items-start gap-4">
+            <div class="size-12 rounded-xl bg-success/15 flex items-center justify-center shrink-0">
+              <.icon name="hero-check-circle" class="size-6 text-success" />
+            </div>
+            <div>
+              <h3 class="text-sm font-semibold text-success">Sandbox Ready</h3>
+              <p class="text-sm text-base-content/50 mt-1">
+                Your sandbox container is running and tools are verified.
+              </p>
+              <%= if @active_run.sandbox_id do %>
+                <a
+                  href={"/sandboxes/#{@active_run.sandbox_id}"}
+                  class="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:text-primary/80 mt-3 transition-colors"
+                >
+                  <.icon name="hero-arrow-top-right-on-square-micro" class="size-4" />
+                  View Sandbox
+                </a>
+              <% end %>
+            </div>
+          </div>
+        </div>
       <% end %>
 
       <%!-- Failed state --%>
@@ -354,17 +433,26 @@ defmodule SkillToSandboxWeb.PipelineLive.Show do
             <span class="size-10 rounded-xl bg-error/15 flex items-center justify-center shrink-0">
               <.icon name="hero-exclamation-triangle" class="size-5 text-error" />
             </span>
-            <div>
+            <div class="flex-1">
               <h3 class="text-sm font-semibold text-error">Pipeline Failed</h3>
               <p class="text-sm text-base-content/50 mt-1">
                 {@active_run.error_message || "An unknown error occurred."}
               </p>
-              <a
-                href={"/skills/#{@skill.id}"}
-                class="inline-flex items-center gap-1 text-xs text-accent hover:text-accent/80 mt-3 transition-colors"
-              >
-                <.icon name="hero-arrow-left-micro" class="size-3" /> Back to skill to retry
-              </a>
+              <div class="flex gap-3 mt-4">
+                <button
+                  id="retry-pipeline-btn"
+                  phx-click="retry"
+                  class="btn btn-primary btn-sm shadow-lg shadow-primary/20"
+                >
+                  <.icon name="hero-arrow-path-micro" class="size-4" /> Retry Pipeline
+                </button>
+                <a
+                  href={"/skills/#{@skill.id}"}
+                  class="inline-flex items-center gap-1 text-xs text-accent hover:text-accent/80 transition-colors self-center"
+                >
+                  <.icon name="hero-arrow-left-micro" class="size-3" /> Back to skill
+                </a>
+              </div>
             </div>
           </div>
         </div>
@@ -696,9 +784,6 @@ defmodule SkillToSandboxWeb.PipelineLive.Show do
           <p class="text-sm text-base-content/60 mt-1">{length(@spec.eval_goals || [])} goals</p>
         </div>
       </div>
-      <p class="text-xs text-base-content/30 mt-4">
-        Docker build integration coming in Phase 4.
-      </p>
     </div>
     """
   end
@@ -767,6 +852,21 @@ defmodule SkillToSandboxWeb.PipelineLive.Show do
   defp approved_or_later?(nil), do: false
   defp approved_or_later?(run), do: run.status in ["building", "configuring", "ready"]
 
+  defp animating?(status) when status in ["parsing", "analyzing", "building", "configuring"],
+    do: true
+
+  defp animating?(_), do: false
+
+  defp format_duration(ms) when is_number(ms) do
+    cond do
+      ms < 1_000 -> "#{ms}ms"
+      ms < 60_000 -> "#{Float.round(ms / 1_000, 1)}s"
+      true -> "#{Float.round(ms / 60_000, 1)}m"
+    end
+  end
+
+  defp format_duration(_), do: ""
+
   defp step_classes(step_num, current) do
     cond do
       step_num < current ->
@@ -791,12 +891,12 @@ defmodule SkillToSandboxWeb.PipelineLive.Show do
   defp status_glow("ready"), do: "glow-primary"
   defp status_glow(_), do: ""
 
-  defp status_label("pending"), do: "Pending — waiting to start"
+  defp status_label("pending"), do: "Pending — initializing pipeline..."
   defp status_label("parsing"), do: "Parsing skill definition..."
   defp status_label("analyzing"), do: "Analyzing with LLM — this may take a moment..."
   defp status_label("reviewing"), do: "Review the generated specification below"
   defp status_label("building"), do: "Building Docker container..."
-  defp status_label("configuring"), do: "Configuring sandbox tools..."
+  defp status_label("configuring"), do: "Verifying sandbox tools..."
   defp status_label("ready"), do: "Sandbox is ready!"
   defp status_label("failed"), do: "Pipeline failed"
   defp status_label(s), do: s
