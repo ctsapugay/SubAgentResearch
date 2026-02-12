@@ -47,7 +47,7 @@ defmodule SkillToSandbox.Sandbox.DockerfileBuilderTest do
       assert result =~ "build-essential"
       assert result =~ "WORKDIR /workspace"
       assert result =~ "COPY package.json /workspace/package.json"
-      assert result =~ "npm install --production"
+      assert result =~ "npm install --omit=dev"
       assert result =~ "COPY tools/ /tools/"
       assert result =~ "chmod +x /tools/*.sh"
       assert result =~ "COPY tool_manifest.json /workspace/tool_manifest.json"
@@ -84,7 +84,7 @@ defmodule SkillToSandbox.Sandbox.DockerfileBuilderTest do
 
       result = DockerfileBuilder.build(spec)
 
-      assert result =~ "yarn install --production"
+      assert result =~ "yarn install --production=true"
       assert result =~ "COPY package.json"
     end
 

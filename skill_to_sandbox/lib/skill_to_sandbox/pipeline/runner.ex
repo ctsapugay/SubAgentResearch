@@ -22,7 +22,7 @@ defmodule SkillToSandbox.Pipeline.Runner do
   alias SkillToSandbox.{Skills, Pipelines, Analysis, Sandboxes}
   alias SkillToSandbox.Analysis.Analyzer
   alias SkillToSandbox.Skills.Parser
-  alias SkillToSandbox.Sandbox.{BuildContext, Docker}
+  alias SkillToSandbox.Sandbox.{BuildContext, Docker, Monitor}
 
   defstruct [
     :run_id,
@@ -182,6 +182,7 @@ defmodule SkillToSandbox.Pipeline.Runner do
       # Configuring (verification) completed
       {:configuring, :ok} ->
         state = record_step_timing(state, :configuring)
+        start_sandbox_monitor(state.sandbox_id)
         {:noreply, transition(state, :ready)}
 
       # Configuring failed
@@ -318,6 +319,29 @@ defmodule SkillToSandbox.Pipeline.Runner do
     }
 
     {:reply, reply, state}
+  end
+
+  # -------------------------------------------------------------------
+  # Sandbox monitor startup
+  # -------------------------------------------------------------------
+
+  defp start_sandbox_monitor(sandbox_id) do
+    sandbox = Sandboxes.get_sandbox!(sandbox_id)
+
+    if sandbox.container_id && !Monitor.alive?(sandbox_id) do
+      case DynamicSupervisor.start_child(
+             SkillToSandbox.SandboxMonitorSupervisor,
+             {Monitor, %{sandbox_id: sandbox.id, container_id: sandbox.container_id}}
+           ) do
+        {:ok, _pid} ->
+          Logger.info("[Runner] Started sandbox monitor for sandbox ##{sandbox_id}")
+
+        {:error, reason} ->
+          Logger.warning(
+            "[Runner] Failed to start sandbox monitor for sandbox ##{sandbox_id}: #{inspect(reason)}"
+          )
+      end
+    end
   end
 
   # -------------------------------------------------------------------

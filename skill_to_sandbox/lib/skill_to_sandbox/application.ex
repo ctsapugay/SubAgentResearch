@@ -18,6 +18,9 @@ defmodule SkillToSandbox.Application do
       {Registry, keys: :unique, name: SkillToSandbox.PipelineRegistry},
       {Task.Supervisor, name: SkillToSandbox.TaskSupervisor},
       SkillToSandbox.Pipeline.Supervisor,
+      # Sandbox monitoring infrastructure
+      {Registry, keys: :unique, name: SkillToSandbox.SandboxRegistry},
+      {DynamicSupervisor, name: SkillToSandbox.SandboxMonitorSupervisor, strategy: :one_for_one},
       # Recovery: resume interrupted pipeline runs after startup
       {Task, &SkillToSandbox.Pipeline.Recovery.recover_on_startup/0},
       # Start to serve requests, typically the last entry

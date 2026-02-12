@@ -277,6 +277,51 @@ defmodule SkillToSandboxWeb.PipelineLive.Show do
     end
   end
 
+  @impl true
+  def handle_event("remove_runtime_dep", %{"name" => name}, socket) do
+    spec = socket.assigns.spec
+    current_packages = get_in(spec.runtime_deps, ["packages"]) || %{}
+    new_packages = Map.delete(current_packages, name)
+    new_runtime_deps = Map.put(spec.runtime_deps, "packages", new_packages)
+
+    case Analysis.update_spec(spec, %{runtime_deps: new_runtime_deps}) do
+      {:ok, updated_spec} ->
+        {:noreply,
+         socket
+         |> assign(:spec, updated_spec)
+         |> assign_spec_form(updated_spec)}
+
+      {:error, _} ->
+        {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("add_runtime_dep", %{"dep_name" => name, "dep_version" => version}, socket) do
+    name = String.trim(name)
+    version = String.trim(version)
+
+    if name != "" do
+      spec = socket.assigns.spec
+      current_packages = get_in(spec.runtime_deps, ["packages"]) || %{}
+      new_packages = Map.put(current_packages, name, if(version == "", do: "latest", else: version))
+      new_runtime_deps = Map.put(spec.runtime_deps, "packages", new_packages)
+
+      case Analysis.update_spec(spec, %{runtime_deps: new_runtime_deps}) do
+        {:ok, updated_spec} ->
+          {:noreply,
+           socket
+           |> assign(:spec, updated_spec)
+           |> assign_spec_form(updated_spec)}
+
+        {:error, _} ->
+          {:noreply, socket}
+      end
+    else
+      {:noreply, socket}
+    end
+  end
+
   # -- Render --
 
   @impl true
@@ -635,17 +680,47 @@ defmodule SkillToSandboxWeb.PipelineLive.Show do
           Runtime Dependencies
         </h3>
         <%= if deps_packages(@spec) != %{} do %>
-          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 mb-3">
             <%= for {name, version} <- deps_packages(@spec) do %>
-              <div class="flex items-center justify-between text-xs font-mono px-3 py-2 rounded-lg bg-base-content/[0.03] border border-base-content/5">
+              <div class="flex items-center justify-between text-xs font-mono px-3 py-2 rounded-lg bg-base-content/[0.03] border border-base-content/5 group">
                 <span class="text-base-content/70">{name}</span>
-                <span class="text-base-content/35">{version}</span>
+                <div class="flex items-center gap-2">
+                  <span class="text-base-content/35">{version}</span>
+                  <button
+                    phx-click="remove_runtime_dep"
+                    phx-value-name={name}
+                    class="text-base-content/15 hover:text-error opacity-0 group-hover:opacity-100 transition-all"
+                    title={"Remove #{name}"}
+                  >
+                    <.icon name="hero-x-mark-micro" class="size-3.5" />
+                  </button>
+                </div>
               </div>
             <% end %>
           </div>
         <% else %>
-          <p class="text-xs text-base-content/30">No runtime dependencies specified.</p>
+          <p class="text-xs text-base-content/30 mb-3">No runtime dependencies specified.</p>
         <% end %>
+        <form phx-submit="add_runtime_dep" class="flex gap-2">
+          <input
+            type="text"
+            name="dep_name"
+            placeholder="Package name..."
+            class="flex-1 text-xs font-mono bg-base-200/50 border border-base-content/10 rounded-lg px-3 py-1.5 focus:outline-none focus:border-primary/40 text-base-content placeholder:text-base-content/25"
+          />
+          <input
+            type="text"
+            name="dep_version"
+            placeholder="Version (e.g. ^18.0.0)"
+            class="w-36 text-xs font-mono bg-base-200/50 border border-base-content/10 rounded-lg px-3 py-1.5 focus:outline-none focus:border-primary/40 text-base-content placeholder:text-base-content/25"
+          />
+          <button
+            type="submit"
+            class="btn btn-outline btn-xs border-base-content/15 text-base-content/50"
+          >
+            <.icon name="hero-plus-micro" class="size-3" /> Add
+          </button>
+        </form>
       </div>
 
       <%!-- Tool Configs --%>
