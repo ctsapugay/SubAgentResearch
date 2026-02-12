@@ -8,15 +8,18 @@ defmodule SkillToSandboxWeb.API.ToolController do
   """
   use SkillToSandboxWeb, :controller
 
+  alias SkillToSandbox.Tools.WebSearch
+
   def search(conn, %{"query" => query}) when is_binary(query) and query != "" do
-    # Will be wired to SkillToSandbox.Tools.WebSearch in Phase 4.
-    # For now, return a stub response.
-    json(conn, %{
-      status: "ok",
-      message: "Search proxy not yet implemented (Phase 4)",
-      query: query,
-      results: []
-    })
+    case WebSearch.execute(%{"query" => query}) do
+      {:ok, results} ->
+        json(conn, %{status: "ok", results: results})
+
+      {:error, reason} ->
+        conn
+        |> put_status(500)
+        |> json(%{status: "error", error: reason})
+    end
   end
 
   def search(conn, _params) do
