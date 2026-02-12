@@ -30,7 +30,8 @@ defmodule SkillToSandbox.Sandbox.DockerCheck do
   """
   def version do
     case System.cmd("docker", ["version", "--format", "{{.Server.Version}}"],
-           stderr_to_stdout: true) do
+           stderr_to_stdout: true
+         ) do
       {version, 0} -> String.trim(version)
       _ -> nil
     end

@@ -45,13 +45,22 @@ defmodule SkillToSandboxWeb.Layouts do
           </a>
 
           <nav class="flex items-center gap-1">
-            <a href="/" class="px-3 py-1.5 rounded-lg text-sm font-medium text-base-content/60 hover:text-base-content hover:bg-base-content/5 transition-all">
+            <a
+              href="/"
+              class="px-3 py-1.5 rounded-lg text-sm font-medium text-base-content/60 hover:text-base-content hover:bg-base-content/5 transition-all"
+            >
               Dashboard
             </a>
-            <a href="/skills" class="px-3 py-1.5 rounded-lg text-sm font-medium text-base-content/60 hover:text-base-content hover:bg-base-content/5 transition-all">
+            <a
+              href="/skills"
+              class="px-3 py-1.5 rounded-lg text-sm font-medium text-base-content/60 hover:text-base-content hover:bg-base-content/5 transition-all"
+            >
               Skills
             </a>
-            <a href="/sandboxes" class="px-3 py-1.5 rounded-lg text-sm font-medium text-base-content/60 hover:text-base-content hover:bg-base-content/5 transition-all">
+            <a
+              href="/sandboxes"
+              class="px-3 py-1.5 rounded-lg text-sm font-medium text-base-content/60 hover:text-base-content hover:bg-base-content/5 transition-all"
+            >
               Sandboxes
             </a>
           </nav>

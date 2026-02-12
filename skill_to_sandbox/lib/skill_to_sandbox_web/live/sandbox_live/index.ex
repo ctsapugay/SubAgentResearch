@@ -26,7 +26,9 @@ defmodule SkillToSandboxWeb.SandboxLive.Index do
 
       <div>
         <h1 class="text-2xl font-semibold tracking-tight">Sandboxes</h1>
-        <p class="text-sm text-base-content/45 mt-0.5">Docker containers running skill environments</p>
+        <p class="text-sm text-base-content/45 mt-0.5">
+          Docker containers running skill environments
+        </p>
       </div>
 
       <%= if @sandboxes == [] do %>
@@ -61,7 +63,10 @@ defmodule SkillToSandboxWeb.SandboxLive.Index do
                 <tr class="hover:bg-base-content/[0.02] transition-colors border-t border-base-content/5">
                   <td class="font-medium">
                     <%= if sandbox.sandbox_spec && sandbox.sandbox_spec.skill do %>
-                      <a href={"/skills/#{sandbox.sandbox_spec.skill.id}"} class="text-primary hover:text-primary/80 transition-colors">
+                      <a
+                        href={"/skills/#{sandbox.sandbox_spec.skill.id}"}
+                        class="text-primary hover:text-primary/80 transition-colors"
+                      >
                         {sandbox.sandbox_spec.skill.name}
                       </a>
                     <% else %>
@@ -81,7 +86,10 @@ defmodule SkillToSandboxWeb.SandboxLive.Index do
                     {Calendar.strftime(sandbox.inserted_at, "%b %d, %Y")}
                   </td>
                   <td class="text-right">
-                    <a href={"/sandboxes/#{sandbox.id}"} class="btn btn-outline btn-xs border-base-content/10 text-base-content/60 hover:bg-base-content/5 hover:border-base-content/20">
+                    <a
+                      href={"/sandboxes/#{sandbox.id}"}
+                      class="btn btn-outline btn-xs border-base-content/10 text-base-content/60 hover:bg-base-content/5 hover:border-base-content/20"
+                    >
                       Monitor
                     </a>
                   </td>

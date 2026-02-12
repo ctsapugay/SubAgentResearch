@@ -9,14 +9,16 @@ defmodule SkillToSandbox.Analysis.SandboxSpec do
   use Ecto.Schema
   import Ecto.Changeset
 
+  alias SkillToSandbox.EctoTypes.JsonData
+
   @statuses ~w(draft approved building built failed)
 
   schema "sandbox_specs" do
     field :base_image, :string
-    field :system_packages, :map, default: %{}
+    field :system_packages, JsonData, default: []
     field :runtime_deps, :map, default: %{}
     field :tool_configs, :map, default: %{}
-    field :eval_goals, :map, default: %{}
+    field :eval_goals, JsonData, default: []
     field :dockerfile_content, :string
     field :status, :string, default: "draft"
 

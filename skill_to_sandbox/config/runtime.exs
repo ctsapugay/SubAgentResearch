@@ -7,6 +7,39 @@ import Config
 # any compile-time configuration in here, as it won't be applied.
 # The block below contains prod specific runtime configuration.
 
+# -- Auto-load .env file in dev/test --
+# Reads .env from the project root (if it exists) and sets any variables
+# that aren't already present in the environment. This means real env vars
+# (e.g. from CI or production) always take precedence.
+if config_env() in [:dev, :test] do
+  env_path = Path.join(File.cwd!(), ".env")
+
+  if File.exists?(env_path) do
+    env_path
+    |> File.read!()
+    |> String.split("\n")
+    |> Enum.each(fn line ->
+      line = String.trim(line)
+
+      unless line == "" or String.starts_with?(line, "#") do
+        case String.split(line, "=", parts: 2) do
+          [key, value] ->
+            key = String.trim(key)
+            value = String.trim(value)
+
+            # Only set if not already in the environment
+            if System.get_env(key) == nil do
+              System.put_env(key, value)
+            end
+
+          _ ->
+            :ok
+        end
+      end
+    end)
+  end
+end
+
 # ## Using releases
 #
 # If you use `mix release`, you need to explicitly enable the server
@@ -24,10 +57,11 @@ config :skill_to_sandbox, SkillToSandboxWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
 # -- LLM Provider Configuration --
+# Supported providers: "openai" or "anthropic"
 config :skill_to_sandbox, :llm,
-  provider: System.get_env("LLM_PROVIDER", "anthropic"),
+  provider: System.get_env("LLM_PROVIDER", "openai"),
   api_key: System.get_env("LLM_API_KEY"),
-  model: System.get_env("LLM_MODEL", "claude-sonnet-4-20250514")
+  model: System.get_env("LLM_MODEL", "gpt-4o")
 
 # -- Web Search API Configuration --
 config :skill_to_sandbox, :search,

@@ -5,6 +5,7 @@
 # It is also run via `mix ecto.setup`.
 
 alias SkillToSandbox.Skills
+alias SkillToSandbox.Skills.Parser
 
 # Seed: frontend-design SKILL.md content (based on Anthropic's reference)
 frontend_design_content = """
@@ -72,15 +73,23 @@ emotional response.
 
 # Only seed if no skills exist yet
 if Skills.count_skills() == 0 do
+  # Parse the content to get structured data
+  parsed_data =
+    case Parser.parse(frontend_design_content) do
+      {:ok, data} -> data
+      _ -> %{}
+    end
+
   {:ok, _skill} =
     Skills.create_skill(%{
       name: "frontend-design",
       description:
         "Create distinctive, production-grade frontend interfaces with innovative layouts, creative use of CSS and JavaScript, and thoughtful UX design.",
-      raw_content: frontend_design_content
+      raw_content: frontend_design_content,
+      parsed_data: parsed_data
     })
 
-  IO.puts("Seeded: frontend-design skill")
+  IO.puts("Seeded: frontend-design skill (with parsed data)")
 else
   IO.puts("Skills already exist, skipping seed.")
 end
