@@ -14,8 +14,12 @@ defmodule SkillToSandbox.Application do
        repos: Application.fetch_env!(:skill_to_sandbox, :ecto_repos), skip: skip_migrations?()},
       {DNSCluster, query: Application.get_env(:skill_to_sandbox, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: SkillToSandbox.PubSub},
-      # Start a worker by calling: SkillToSandbox.Worker.start_link(arg)
-      # {SkillToSandbox.Worker, arg},
+      # Pipeline infrastructure
+      {Registry, keys: :unique, name: SkillToSandbox.PipelineRegistry},
+      {Task.Supervisor, name: SkillToSandbox.TaskSupervisor},
+      SkillToSandbox.Pipeline.Supervisor,
+      # Recovery: resume interrupted pipeline runs after startup
+      {Task, &SkillToSandbox.Pipeline.Recovery.recover_on_startup/0},
       # Start to serve requests, typically the last entry
       SkillToSandboxWeb.Endpoint
     ]

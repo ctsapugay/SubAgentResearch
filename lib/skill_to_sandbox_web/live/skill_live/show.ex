@@ -10,8 +10,7 @@ defmodule SkillToSandboxWeb.SkillLive.Show do
   use SkillToSandboxWeb, :live_view
 
   alias SkillToSandbox.Skills
-  alias SkillToSandbox.Pipelines
-  alias SkillToSandbox.Analysis.Analyzer
+  alias SkillToSandbox.Pipeline.Supervisor, as: PipelineSupervisor
 
   @impl true
   def mount(%{"id" => id}, _session, socket) do
@@ -36,21 +35,20 @@ defmodule SkillToSandboxWeb.SkillLive.Show do
     else
       socket = assign(socket, :analyzing, true)
 
-      # Create pipeline run record
-      {:ok, run} =
-        Pipelines.create_run(%{
-          skill_id: skill.id,
-          status: "analyzing",
-          current_step: 2,
-          started_at: DateTime.utc_now()
-        })
+      # Start a pipeline run via the Pipeline Supervisor (GenServer-backed)
+      case PipelineSupervisor.start_pipeline(skill.id) do
+        {:ok, run} ->
+          {:noreply,
+           socket
+           |> put_flash(:info, "Pipeline started — parsing and analyzing your skill...")
+           |> push_navigate(to: "/skills/#{skill.id}/pipeline?run=#{run.id}")}
 
-      # Spawn the LLM analysis as an async task so the LiveView stays responsive
-      send(self(), {:run_analysis, skill, run})
-
-      {:noreply,
-       socket
-       |> put_flash(:info, "Analysis started. Waiting for LLM response...")}
+        {:error, reason} ->
+          {:noreply,
+           socket
+           |> assign(:analyzing, false)
+           |> put_flash(:error, "Failed to start pipeline: #{inspect(reason)}")}
+      end
     end
   end
 
@@ -62,41 +60,6 @@ defmodule SkillToSandboxWeb.SkillLive.Show do
      socket
      |> put_flash(:info, "Skill deleted.")
      |> redirect(to: "/skills")}
-  end
-
-  @impl true
-  def handle_info({:run_analysis, skill, run}, socket) do
-    case Analyzer.analyze(skill) do
-      {:ok, spec} ->
-        # Update pipeline run to reviewing state with the spec
-        {:ok, _run} =
-          Pipelines.update_run(run, %{
-            status: "reviewing",
-            current_step: 3,
-            sandbox_spec_id: spec.id
-          })
-
-        {:noreply,
-         socket
-         |> put_flash(:info, "Analysis complete! Review the sandbox specification.")
-         |> push_navigate(to: "/skills/#{skill.id}/pipeline?run=#{run.id}")}
-
-      {:error, reason} ->
-        error_msg = if is_binary(reason), do: reason, else: inspect(reason)
-
-        {:ok, _run} =
-          Pipelines.update_run(run, %{
-            status: "failed",
-            current_step: 2,
-            error_message: error_msg,
-            completed_at: DateTime.utc_now()
-          })
-
-        {:noreply,
-         socket
-         |> assign(:analyzing, false)
-         |> put_flash(:error, "Analysis failed: #{error_msg}")}
-    end
   end
 
   @impl true
