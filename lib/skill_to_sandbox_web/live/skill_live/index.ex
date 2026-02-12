@@ -76,7 +76,10 @@ defmodule SkillToSandboxWeb.SkillLive.Index do
               <%= for skill <- @skills do %>
                 <tr class="hover:bg-base-content/[0.02] transition-colors border-t border-base-content/5">
                   <td>
-                    <a href={"/skills/#{skill.id}"} class="font-medium text-primary hover:text-primary/80 transition-colors">
+                    <a
+                      href={"/skills/#{skill.id}"}
+                      class="font-medium text-primary hover:text-primary/80 transition-colors"
+                    >
                       {skill.name}
                     </a>
                   </td>
@@ -85,9 +88,13 @@ defmodule SkillToSandboxWeb.SkillLive.Index do
                   </td>
                   <td>
                     <%= if skill.source_url do %>
-                      <span class="text-xs font-medium text-accent bg-accent/10 px-2 py-0.5 rounded-full">URL</span>
+                      <span class="text-xs font-medium text-accent bg-accent/10 px-2 py-0.5 rounded-full">
+                        URL
+                      </span>
                     <% else %>
-                      <span class="text-xs font-medium text-base-content/40 bg-base-content/5 px-2 py-0.5 rounded-full">Upload</span>
+                      <span class="text-xs font-medium text-base-content/40 bg-base-content/5 px-2 py-0.5 rounded-full">
+                        Upload
+                      </span>
                     <% end %>
                   </td>
                   <td class="whitespace-nowrap text-sm text-base-content/40">
@@ -95,7 +102,10 @@ defmodule SkillToSandboxWeb.SkillLive.Index do
                   </td>
                   <td class="text-right">
                     <div class="flex gap-1.5 justify-end">
-                      <a href={"/skills/#{skill.id}"} class="btn btn-outline btn-xs border-base-content/10 text-base-content/60 hover:bg-base-content/5 hover:border-base-content/20">
+                      <a
+                        href={"/skills/#{skill.id}"}
+                        class="btn btn-outline btn-xs border-base-content/10 text-base-content/60 hover:bg-base-content/5 hover:border-base-content/20"
+                      >
                         View
                       </a>
                       <button

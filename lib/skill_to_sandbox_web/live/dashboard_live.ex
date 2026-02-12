@@ -45,7 +45,10 @@ defmodule SkillToSandboxWeb.DashboardLive do
             <a href="/skills/new" class="btn btn-primary btn-sm shadow-lg shadow-primary/25">
               <.icon name="hero-plus-micro" class="size-4" /> Upload Skill
             </a>
-            <a href="/skills" class="btn btn-outline btn-sm border-base-content/15 text-base-content/70 hover:bg-base-content/5 hover:border-base-content/25">
+            <a
+              href="/skills"
+              class="btn btn-outline btn-sm border-base-content/15 text-base-content/70 hover:bg-base-content/5 hover:border-base-content/25"
+            >
               <.icon name="hero-folder-open-micro" class="size-4" /> Browse Skills
             </a>
           </div>
@@ -60,7 +63,9 @@ defmodule SkillToSandboxWeb.DashboardLive do
       <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <a href="/skills" class="glass-panel glass-panel-hover p-5 block group">
           <div class="flex items-center justify-between mb-4">
-            <span class="text-[11px] font-semibold uppercase tracking-widest text-base-content/30">Skills</span>
+            <span class="text-[11px] font-semibold uppercase tracking-widest text-base-content/30">
+              Skills
+            </span>
             <span class="size-9 rounded-xl bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
               <.icon name="hero-document-text-micro" class="size-4 text-primary" />
             </span>
@@ -71,7 +76,9 @@ defmodule SkillToSandboxWeb.DashboardLive do
 
         <div class="glass-panel p-5">
           <div class="flex items-center justify-between mb-4">
-            <span class="text-[11px] font-semibold uppercase tracking-widest text-base-content/30">Pipelines</span>
+            <span class="text-[11px] font-semibold uppercase tracking-widest text-base-content/30">
+              Pipelines
+            </span>
             <span class="size-9 rounded-xl bg-secondary/10 flex items-center justify-center">
               <.icon name="hero-arrow-path-micro" class="size-4 text-secondary" />
             </span>
@@ -82,7 +89,9 @@ defmodule SkillToSandboxWeb.DashboardLive do
 
         <a href="/sandboxes" class="glass-panel glass-panel-hover p-5 block group">
           <div class="flex items-center justify-between mb-4">
-            <span class="text-[11px] font-semibold uppercase tracking-widest text-base-content/30">Sandboxes</span>
+            <span class="text-[11px] font-semibold uppercase tracking-widest text-base-content/30">
+              Sandboxes
+            </span>
             <span class="size-9 rounded-xl bg-accent/10 flex items-center justify-center group-hover:bg-accent/20 transition-colors">
               <.icon name="hero-server-micro" class="size-4 text-accent" />
             </span>
@@ -93,7 +102,9 @@ defmodule SkillToSandboxWeb.DashboardLive do
 
         <a href="/sandboxes" class="glass-panel glass-panel-hover p-5 block group">
           <div class="flex items-center justify-between mb-4">
-            <span class="text-[11px] font-semibold uppercase tracking-widest text-base-content/30">Running</span>
+            <span class="text-[11px] font-semibold uppercase tracking-widest text-base-content/30">
+              Running
+            </span>
             <span class="size-9 rounded-xl bg-success/10 flex items-center justify-center group-hover:bg-success/20 transition-colors">
               <.icon name="hero-play-micro" class="size-4 text-success" />
             </span>
@@ -138,16 +149,24 @@ defmodule SkillToSandboxWeb.DashboardLive do
           <h3 class="text-sm font-semibold text-base-content mb-3">How it works</h3>
           <ol class="space-y-2.5">
             <li class="flex items-start gap-3">
-              <span class="size-6 rounded-full bg-primary/15 flex items-center justify-center shrink-0 mt-0.5 text-[11px] font-bold text-primary">1</span>
+              <span class="size-6 rounded-full bg-primary/15 flex items-center justify-center shrink-0 mt-0.5 text-[11px] font-bold text-primary">
+                1
+              </span>
               <span class="text-sm text-base-content/55">Upload a SKILL.md definition file</span>
             </li>
             <li class="flex items-start gap-3">
-              <span class="size-6 rounded-full bg-primary/15 flex items-center justify-center shrink-0 mt-0.5 text-[11px] font-bold text-primary">2</span>
+              <span class="size-6 rounded-full bg-primary/15 flex items-center justify-center shrink-0 mt-0.5 text-[11px] font-bold text-primary">
+                2
+              </span>
               <span class="text-sm text-base-content/55">LLM analyzes it into a sandbox spec</span>
             </li>
             <li class="flex items-start gap-3">
-              <span class="size-6 rounded-full bg-primary/15 flex items-center justify-center shrink-0 mt-0.5 text-[11px] font-bold text-primary">3</span>
-              <span class="text-sm text-base-content/55">Review, approve, and build a Docker container</span>
+              <span class="size-6 rounded-full bg-primary/15 flex items-center justify-center shrink-0 mt-0.5 text-[11px] font-bold text-primary">
+                3
+              </span>
+              <span class="text-sm text-base-content/55">
+                Review, approve, and build a Docker container
+              </span>
             </li>
           </ol>
         </div>

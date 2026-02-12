@@ -36,22 +36,34 @@ defmodule SkillToSandboxWeb.SandboxLive.Show do
         </div>
         <div class="p-5 grid grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
-            <span class="text-[11px] font-semibold uppercase tracking-widest text-base-content/30 block mb-1">Status</span>
+            <span class="text-[11px] font-semibold uppercase tracking-widest text-base-content/30 block mb-1">
+              Status
+            </span>
             <span class="inline-flex items-center gap-1.5 text-sm font-medium">
               <span class={["size-1.5 rounded-full", status_dot(@sandbox.status)]} />
               {@sandbox.status}
             </span>
           </div>
           <div>
-            <span class="text-[11px] font-semibold uppercase tracking-widest text-base-content/30 block mb-1">Container</span>
-            <span class="font-mono text-sm text-base-content/60">{@sandbox.container_id || "Not assigned"}</span>
+            <span class="text-[11px] font-semibold uppercase tracking-widest text-base-content/30 block mb-1">
+              Container
+            </span>
+            <span class="font-mono text-sm text-base-content/60">
+              {@sandbox.container_id || "Not assigned"}
+            </span>
           </div>
           <div>
-            <span class="text-[11px] font-semibold uppercase tracking-widest text-base-content/30 block mb-1">Image</span>
-            <span class="font-mono text-sm text-base-content/60">{@sandbox.image_id || "Not assigned"}</span>
+            <span class="text-[11px] font-semibold uppercase tracking-widest text-base-content/30 block mb-1">
+              Image
+            </span>
+            <span class="font-mono text-sm text-base-content/60">
+              {@sandbox.image_id || "Not assigned"}
+            </span>
           </div>
           <div>
-            <span class="text-[11px] font-semibold uppercase tracking-widest text-base-content/30 block mb-1">Created</span>
+            <span class="text-[11px] font-semibold uppercase tracking-widest text-base-content/30 block mb-1">
+              Created
+            </span>
             <span class="text-sm text-base-content/60">
               {Calendar.strftime(@sandbox.inserted_at, "%b %d, %Y %H:%M")}
             </span>
@@ -75,9 +87,15 @@ defmodule SkillToSandboxWeb.SandboxLive.Show do
       <div class="glass-panel p-5">
         <h2 class="text-sm font-semibold text-base-content mb-3">Controls</h2>
         <div class="flex gap-2">
-          <button class="btn btn-outline btn-sm border-base-content/10 text-base-content/50" disabled>Stop</button>
-          <button class="btn btn-outline btn-sm border-base-content/10 text-base-content/50" disabled>Restart</button>
-          <button class="btn btn-outline btn-sm border-error/20 text-error/50" disabled>Destroy</button>
+          <button class="btn btn-outline btn-sm border-base-content/10 text-base-content/50" disabled>
+            Stop
+          </button>
+          <button class="btn btn-outline btn-sm border-base-content/10 text-base-content/50" disabled>
+            Restart
+          </button>
+          <button class="btn btn-outline btn-sm border-error/20 text-error/50" disabled>
+            Destroy
+          </button>
         </div>
         <p class="text-xs text-base-content/25 mt-2">Container controls available in Phase 6</p>
       </div>
