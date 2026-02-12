@@ -49,6 +49,13 @@ defmodule SkillToSandbox.Sandboxes do
   end
 
   @doc """
+  Deletes a sandbox.
+  """
+  def delete_sandbox(%Sandbox{} = sandbox) do
+    Repo.delete(sandbox)
+  end
+
+  @doc """
   Returns all sandboxes for a given sandbox spec.
   """
   def sandboxes_for_spec(sandbox_spec_id) do

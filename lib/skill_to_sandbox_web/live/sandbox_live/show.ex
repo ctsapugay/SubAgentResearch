@@ -182,22 +182,29 @@ defmodule SkillToSandboxWeb.SandboxLive.Show do
     sandbox = socket.assigns.sandbox
     socket = assign(socket, :action_in_progress, :destroying)
 
-    if Monitor.alive?(sandbox.id) do
-      Monitor.destroy_container(sandbox.id)
-    else
-      SkillToSandbox.Sandbox.Docker.remove_container(sandbox.container_id)
+    result =
+      if Monitor.alive?(sandbox.id) do
+        Monitor.destroy_container(sandbox.id)
+      else
+        SkillToSandbox.Sandbox.Docker.remove_container(sandbox.container_id)
+      end
+
+    case result do
+      {:ok, _} ->
+        updated_sandbox = Sandboxes.get_sandbox!(sandbox.id)
+        {:ok, _} = Sandboxes.delete_sandbox(updated_sandbox)
+
+        {:noreply,
+         socket
+         |> put_flash(:info, "Container destroyed.")
+         |> push_navigate(to: "/sandboxes")}
+
+      {:error, reason} ->
+        {:noreply,
+         socket
+         |> assign(:action_in_progress, nil)
+         |> put_flash(:error, "Failed to destroy container: #{inspect(reason)}")}
     end
-
-    updated_sandbox = Sandboxes.get_sandbox!(sandbox.id)
-    {:ok, _} = Sandboxes.update_sandbox(updated_sandbox, %{status: "stopped"})
-
-    {:noreply,
-     socket
-     |> assign(:action_in_progress, nil)
-     |> assign(:status, "stopped")
-     |> assign(:sandbox, Sandboxes.get_sandbox!(sandbox.id))
-     |> assign(:monitor_alive, false)
-     |> put_flash(:info, "Container destroyed.")}
   end
 
   # -- Render --
