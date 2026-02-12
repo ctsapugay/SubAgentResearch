@@ -76,20 +76,26 @@ defmodule SkillToSandboxWeb.SandboxLive.Index do
     sandbox_id = String.to_integer(id_str)
     sandbox = Sandboxes.get_sandbox!(sandbox_id)
 
-    if Monitor.alive?(sandbox_id) do
-      Monitor.destroy_container(sandbox_id)
-    else
-      SkillToSandbox.Sandbox.Docker.remove_container(sandbox.container_id)
+    result =
+      if Monitor.alive?(sandbox_id) do
+        Monitor.destroy_container(sandbox_id)
+      else
+        SkillToSandbox.Sandbox.Docker.remove_container(sandbox.container_id)
+      end
+
+    case result do
+      {:ok, _} ->
+        updated = Sandboxes.get_sandbox!(sandbox_id)
+        {:ok, _} = Sandboxes.delete_sandbox(updated)
+
+        {:noreply,
+         socket
+         |> stream_delete(:sandboxes, updated)
+         |> put_flash(:info, "Container destroyed.")}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Failed to destroy: #{inspect(reason)}")}
     end
-
-    updated = Sandboxes.get_sandbox!(sandbox_id)
-    {:ok, _} = Sandboxes.update_sandbox(updated, %{status: "stopped"})
-    refreshed = Sandboxes.get_sandbox!(sandbox_id)
-
-    {:noreply,
-     socket
-     |> stream_insert(:sandboxes, refreshed)
-     |> put_flash(:info, "Container destroyed.")}
   end
 
   @impl true

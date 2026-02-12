@@ -122,14 +122,31 @@ defmodule SkillToSandbox.Sandbox.Docker do
 
   @doc """
   Forcefully remove a container (running or stopped).
+
+  Returns `{:ok, ...}` if the container was removed or didn't exist
+  (since the goal — container gone — is already achieved).
   """
   def remove_container(container_id) do
     Logger.info("[Docker] Removing container #{truncate_id(container_id)}")
 
-    run_with_timeout(
-      fn -> System.cmd("docker", ["rm", "-f", container_id], stderr_to_stdout: true) end,
-      @cmd_timeout_ms
-    )
+    case run_with_timeout(
+           fn -> System.cmd("docker", ["rm", "-f", container_id], stderr_to_stdout: true) end,
+           @cmd_timeout_ms
+         ) do
+      {:ok, _} = ok ->
+        ok
+
+      {:error, msg} = err when is_binary(msg) ->
+        if String.contains?(msg, "No such container") do
+          Logger.info("[Docker] Container #{truncate_id(container_id)} already removed")
+          {:ok, "already removed"}
+        else
+          err
+        end
+
+      other ->
+        other
+    end
   end
 
   @doc """
