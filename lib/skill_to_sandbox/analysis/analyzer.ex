@@ -36,6 +36,13 @@ defmodule SkillToSandbox.Analysis.Analyzer do
   4. Evaluation goals should span easy/medium/hard difficulty
   5. Always include git and curl in system_packages (universally useful)
   6. For web/frontend skills, include a browser or headless browser if the skill mentions browser usage
+  7. CRITICAL: Only include packages that ACTUALLY EXIST on the package registry (npm, PyPI).
+     Use the EXACT canonical package name as published. Common mistakes to avoid:
+     - Use "motion" or "framer-motion", NOT "use-motion" or "react-motion-library"
+     - Use "tailwindcss", NOT "tailwind"
+     - Use "@types/react", NOT "react-types"
+     - When unsure about an exact package name, OMIT it rather than guess
+  8. For version specifiers, use realistic ranges (e.g. "^18.0.0" for React, "^3.0.0" for Tailwind)
 
   You MUST respond with ONLY a valid JSON object, no markdown fences, no explanation.
   """

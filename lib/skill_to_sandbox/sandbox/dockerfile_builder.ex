@@ -86,7 +86,7 @@ defmodule SkillToSandbox.Sandbox.DockerfileBuilder do
   defp runtime_deps_block(%{runtime_deps: %{"manager" => "yarn"}}) do
     "# Node.js dependencies (yarn)\n" <>
       "COPY package.json /workspace/package.json\n" <>
-      "RUN yarn install --production"
+      "RUN yarn install --production=true"
   end
 
   defp runtime_deps_block(%{runtime_deps: %{"manager" => "pnpm"}}) do
@@ -151,10 +151,10 @@ defmodule SkillToSandbox.Sandbox.DockerfileBuilder do
 
   defp npm_install_command(%{runtime_deps: %{"packages" => pkgs}})
        when map_size(pkgs) > 0 do
-    "npm install --production"
+    "npm install --omit=dev"
   end
 
-  defp npm_install_command(_), do: "npm install --production"
+  defp npm_install_command(_), do: "npm install --omit=dev"
 
   defp env_line(key, value) when is_binary(value) and value != "" do
     "ENV #{key}=\"#{value}\""
