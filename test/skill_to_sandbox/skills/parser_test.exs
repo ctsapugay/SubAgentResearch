@@ -281,4 +281,119 @@ defmodule SkillToSandbox.Skills.ParserTest do
       assert css_count == 1
     end
   end
+
+  describe "parse_directory/1" do
+    test "parses directory with SKILL.md and merges from all .md and .sh files" do
+      file_tree = %{
+        "SKILL.md" => """
+        ---
+        name: agent-browser
+        description: Browser automation skill
+        ---
+
+        # Agent Browser Skill
+
+        Use Playwright and the browser for automation.
+
+        ## Tools
+
+        - Execute terminal commands
+        """,
+        "references/commands.md" => """
+        ## Command Reference
+
+        Use React for UI. Run shell scripts with Bash.
+        """,
+        "templates/form-automation.sh" => """
+        #!/bin/bash
+        # Form automation template
+        echo "Use Python and pip for scripting"
+        """
+      }
+
+      {:ok, parsed} = Parser.parse_directory(file_tree)
+
+      assert parsed["name"] == "agent-browser"
+      assert parsed["description"] == "Browser automation skill"
+      assert "Playwright" in parsed["mentioned_dependencies"]
+      assert "React" in parsed["mentioned_frameworks"]
+      assert "Python" in parsed["mentioned_frameworks"]
+      assert "pip" in parsed["mentioned_frameworks"]
+      assert "cli_execution" in parsed["mentioned_tools"]
+      assert "Command Reference" in parsed["sections"]
+      assert "Tools" in parsed["sections"]
+    end
+
+    test "uses first .md at root when SKILL.md is absent" do
+      file_tree = %{
+        "README.md" => """
+        ---
+        name: alt-skill
+        description: Skill without SKILL.md
+        ---
+
+        # Alt Skill
+
+        Uses Vue and npm.
+        """
+      }
+
+      {:ok, parsed} = Parser.parse_directory(file_tree)
+
+      assert parsed["name"] == "alt-skill"
+      assert "Vue" in parsed["mentioned_frameworks"]
+      assert "npm" in parsed["mentioned_frameworks"]
+    end
+
+    test "returns error for empty file_tree" do
+      assert {:error, :empty_content} = Parser.parse_directory(%{})
+    end
+
+    test "returns error for nil" do
+      assert {:error, :empty_content} = Parser.parse_directory(nil)
+    end
+
+    test "returns error when no .md file exists" do
+      file_tree = %{
+        "templates/script.sh" => "#!/bin/bash\necho hello"
+      }
+
+      assert {:error, :no_skill_md} = Parser.parse_directory(file_tree)
+    end
+
+    test "deduplicates tools and frameworks across files" do
+      file_tree = %{
+        "SKILL.md" => """
+        ---
+        name: dedup-skill
+        ---
+        # Skill
+        Use React and the browser.
+        """,
+        "references/extra.md" => "More React and browser usage."
+      }
+
+      {:ok, parsed} = Parser.parse_directory(file_tree)
+
+      assert Enum.count(parsed["mentioned_frameworks"], &(&1 == "React")) == 1
+      assert Enum.count(parsed["mentioned_tools"], &(&1 == "browser")) == 1
+    end
+
+    test "concatenates raw_guidelines from all files" do
+      file_tree = %{
+        "SKILL.md" => """
+        ---
+        name: concat-skill
+        ---
+        # Main content
+        """,
+        "ref.md" => "## Ref content"
+      }
+
+      {:ok, parsed} = Parser.parse_directory(file_tree)
+
+      assert parsed["raw_guidelines"] =~ "Main content"
+      assert parsed["raw_guidelines"] =~ "Ref content"
+    end
+  end
 end

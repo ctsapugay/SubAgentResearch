@@ -111,14 +111,20 @@ defmodule SkillToSandbox.Skills.GitHubFetcherTest do
       Bypass.expect(bypass, "GET", "/repos/org/repo/git/blobs/blob1", fn conn ->
         content = Base.encode64("# Agent Browser\n\nMain skill.")
         body = %{"content" => content, "encoding" => "base64"}
-        conn |> Plug.Conn.put_resp_content_type("application/json") |> Plug.Conn.send_resp(200, Jason.encode!(body))
+
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(200, Jason.encode!(body))
       end)
 
       # Blob 2
       Bypass.expect(bypass, "GET", "/repos/org/repo/git/blobs/blob2", fn conn ->
         content = Base.encode64("# Commands\n\nReference content.")
         body = %{"content" => content, "encoding" => "base64"}
-        conn |> Plug.Conn.put_resp_content_type("application/json") |> Plug.Conn.send_resp(200, Jason.encode!(body))
+
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(200, Jason.encode!(body))
       end)
 
       url = "https://github.com/org/repo/tree/main/skills/agent-browser"
@@ -143,7 +149,10 @@ defmodule SkillToSandbox.Skills.GitHubFetcherTest do
     test "returns :empty_directory when no files under path", %{bypass: bypass} do
       Bypass.expect(bypass, "GET", "/repos/org/repo/commits/main", fn conn ->
         body = %{"commit" => %{"tree" => %{"sha" => "treesha123"}}}
-        conn |> Plug.Conn.put_resp_content_type("application/json") |> Plug.Conn.send_resp(200, Jason.encode!(body))
+
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(200, Jason.encode!(body))
       end)
 
       Bypass.expect(bypass, "GET", "/repos/org/repo/git/trees/treesha123", fn conn ->

@@ -24,7 +24,9 @@ defmodule Mix.Tasks.SkillToSandbox.BackfillFileTree do
       |> Repo.all()
       |> Enum.filter(fn skill ->
         file_tree = skill.file_tree
-        (file_tree == nil or file_tree == %{}) and is_binary(skill.raw_content) and skill.raw_content != ""
+
+        (file_tree == nil or file_tree == %{}) and is_binary(skill.raw_content) and
+          skill.raw_content != ""
       end)
 
     count = length(skills)

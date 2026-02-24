@@ -39,7 +39,9 @@ defmodule SkillToSandbox.Skills.Skill do
   end
 
   defp validate_directory_file_tree(changeset) do
-    source_type = get_field(changeset, :source_type) || get_change(changeset, :source_type) || "file"
+    source_type =
+      get_field(changeset, :source_type) || get_change(changeset, :source_type) || "file"
+
     file_tree = get_field(changeset, :file_tree) || get_change(changeset, :file_tree)
 
     if source_type == "directory" do

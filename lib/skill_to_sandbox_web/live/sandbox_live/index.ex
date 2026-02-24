@@ -103,121 +103,121 @@ defmodule SkillToSandboxWeb.SandboxLive.Index do
     ~H"""
     <div class="space-y-6">
       <a href="/" class="back-btn">
-          <.icon name="hero-arrow-left-micro" class="size-3.5" /> Dashboard
-        </a>
+        <.icon name="hero-arrow-left-micro" class="size-3.5" /> Dashboard
+      </a>
 
-        <div>
-          <h1 class="text-2xl font-semibold tracking-tight">Sandboxes</h1>
-          <p class="text-sm text-base-content/45 mt-0.5">
-            Docker containers running skill environments
-          </p>
+      <div>
+        <h1 class="text-2xl font-semibold tracking-tight">Sandboxes</h1>
+        <p class="text-sm text-base-content/45 mt-0.5">
+          Docker containers running skill environments
+        </p>
+      </div>
+
+      <div id="sandboxes-table" phx-update="stream">
+        <%!-- Empty state: shown only when this is the sole child --%>
+        <div class={[
+          "glass-panel",
+          if(@sandboxes_empty?, do: "", else: "hidden")
+        ]}>
+          <div class="flex flex-col items-center text-center py-16 px-6">
+            <span class="size-14 rounded-2xl bg-base-content/5 flex items-center justify-center mb-4">
+              <.icon name="hero-server" class="size-7 text-base-content/20" />
+            </span>
+            <h3 class="text-base font-semibold text-base-content">No sandboxes yet</h3>
+            <p class="text-sm text-base-content/45 mt-1 max-w-sm">
+              Sandboxes are created when you run the pipeline on a skill.
+            </p>
+            <a href="/skills" class="btn btn-primary btn-sm mt-5 shadow-lg shadow-primary/20">
+              View Skills
+            </a>
+          </div>
         </div>
 
-        <div id="sandboxes-table" phx-update="stream">
-          <%!-- Empty state: shown only when this is the sole child --%>
-          <div class={[
-            "glass-panel",
-            if(@sandboxes_empty?, do: "", else: "hidden")
-          ]}>
-            <div class="flex flex-col items-center text-center py-16 px-6">
-              <span class="size-14 rounded-2xl bg-base-content/5 flex items-center justify-center mb-4">
-                <.icon name="hero-server" class="size-7 text-base-content/20" />
+        <%!-- Sandbox cards --%>
+        <div
+          :for={{id, sandbox} <- @streams.sandboxes}
+          id={id}
+          class="glass-panel glass-panel-hover p-5 mb-4"
+        >
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-4 min-w-0">
+              <%!-- Status icon --%>
+              <span class={[
+                "size-10 rounded-xl flex items-center justify-center shrink-0",
+                status_icon_bg(sandbox.status)
+              ]}>
+                <.icon
+                  name={status_icon_name(sandbox.status)}
+                  class={["size-5", status_icon_color(sandbox.status)]}
+                />
               </span>
-              <h3 class="text-base font-semibold text-base-content">No sandboxes yet</h3>
-              <p class="text-sm text-base-content/45 mt-1 max-w-sm">
-                Sandboxes are created when you run the pipeline on a skill.
-              </p>
-              <a href="/skills" class="btn btn-primary btn-sm mt-5 shadow-lg shadow-primary/20">
-                View Skills
-              </a>
-            </div>
-          </div>
 
-          <%!-- Sandbox cards --%>
-          <div
-            :for={{id, sandbox} <- @streams.sandboxes}
-            id={id}
-            class="glass-panel glass-panel-hover p-5 mb-4"
-          >
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-4 min-w-0">
-                <%!-- Status icon --%>
-                <span class={[
-                  "size-10 rounded-xl flex items-center justify-center shrink-0",
-                  status_icon_bg(sandbox.status)
-                ]}>
-                  <.icon
-                    name={status_icon_name(sandbox.status)}
-                    class={["size-5", status_icon_color(sandbox.status)]}
-                  />
-                </span>
-
-                <div class="min-w-0">
-                  <div class="flex items-center gap-2">
+              <div class="min-w-0">
+                <div class="flex items-center gap-2">
+                  <a
+                    href={"/sandboxes/#{sandbox.id}"}
+                    class="text-sm font-semibold text-base-content hover:text-primary transition-colors"
+                  >
+                    Sandbox #{sandbox.id}
+                  </a>
+                  <span class={[
+                    "inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide",
+                    status_badge_class(sandbox.status)
+                  ]}>
+                    <span class={["size-1.5 rounded-full", status_dot(sandbox.status)]} />
+                    {sandbox.status}
+                  </span>
+                </div>
+                <div class="flex items-center gap-3 mt-1">
+                  <%= if sandbox.sandbox_spec && sandbox.sandbox_spec.skill do %>
                     <a
-                      href={"/sandboxes/#{sandbox.id}"}
-                      class="text-sm font-semibold text-base-content hover:text-primary transition-colors"
+                      href={"/skills/#{sandbox.sandbox_spec.skill.id}"}
+                      class="text-xs text-primary/60 hover:text-primary transition-colors"
                     >
-                      Sandbox #{sandbox.id}
+                      {sandbox.sandbox_spec.skill.name}
                     </a>
-                    <span class={[
-                      "inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide",
-                      status_badge_class(sandbox.status)
-                    ]}>
-                      <span class={["size-1.5 rounded-full", status_dot(sandbox.status)]} />
-                      {sandbox.status}
-                    </span>
-                  </div>
-                  <div class="flex items-center gap-3 mt-1">
-                    <%= if sandbox.sandbox_spec && sandbox.sandbox_spec.skill do %>
-                      <a
-                        href={"/skills/#{sandbox.sandbox_spec.skill.id}"}
-                        class="text-xs text-primary/60 hover:text-primary transition-colors"
-                      >
-                        {sandbox.sandbox_spec.skill.name}
-                      </a>
-                      <span class="text-base-content/10">|</span>
-                    <% end %>
-                    <span class="text-xs font-mono text-base-content/30">
-                      {truncate_id(sandbox.container_id)}
-                    </span>
                     <span class="text-base-content/10">|</span>
-                    <span class="text-xs text-base-content/30">
-                      {Calendar.strftime(sandbox.inserted_at, "%b %d, %Y %H:%M")}
-                    </span>
-                  </div>
+                  <% end %>
+                  <span class="text-xs font-mono text-base-content/30">
+                    {truncate_id(sandbox.container_id)}
+                  </span>
+                  <span class="text-base-content/10">|</span>
+                  <span class="text-xs text-base-content/30">
+                    {Calendar.strftime(sandbox.inserted_at, "%b %d, %Y %H:%M")}
+                  </span>
                 </div>
               </div>
+            </div>
 
-              <%!-- Actions --%>
-              <div class="flex items-center gap-2 shrink-0">
-                <a
-                  href={"/sandboxes/#{sandbox.id}"}
-                  class="btn btn-outline btn-xs border-base-content/10 text-base-content/60 hover:bg-base-content/5 hover:border-base-content/20 transition-all"
-                >
-                  <.icon name="hero-eye-micro" class="size-3.5" /> Monitor
-                </a>
-                <%= if sandbox.status == "running" do %>
-                  <button
-                    phx-click="stop_sandbox"
-                    phx-value-id={sandbox.id}
-                    class="btn btn-outline btn-xs border-warning/20 text-warning/70 hover:bg-warning/10 hover:border-warning/30 transition-all"
-                  >
-                    <.icon name="hero-stop-micro" class="size-3.5" /> Stop
-                  </button>
-                <% end %>
+            <%!-- Actions --%>
+            <div class="flex items-center gap-2 shrink-0">
+              <a
+                href={"/sandboxes/#{sandbox.id}"}
+                class="btn btn-outline btn-xs border-base-content/10 text-base-content/60 hover:bg-base-content/5 hover:border-base-content/20 transition-all"
+              >
+                <.icon name="hero-eye-micro" class="size-3.5" /> Monitor
+              </a>
+              <%= if sandbox.status == "running" do %>
                 <button
-                  phx-click="destroy_sandbox"
+                  phx-click="stop_sandbox"
                   phx-value-id={sandbox.id}
-                  data-confirm="Destroy this container? This cannot be undone."
-                  class="btn btn-outline btn-xs border-error/20 text-error/60 hover:bg-error/10 hover:border-error/30 transition-all"
+                  class="btn btn-outline btn-xs border-warning/20 text-warning/70 hover:bg-warning/10 hover:border-warning/30 transition-all"
                 >
-                  <.icon name="hero-trash-micro" class="size-3.5" />
+                  <.icon name="hero-stop-micro" class="size-3.5" /> Stop
                 </button>
-              </div>
+              <% end %>
+              <button
+                phx-click="destroy_sandbox"
+                phx-value-id={sandbox.id}
+                data-confirm="Destroy this container? This cannot be undone."
+                class="btn btn-outline btn-xs border-error/20 text-error/60 hover:bg-error/10 hover:border-error/30 transition-all"
+              >
+                <.icon name="hero-trash-micro" class="size-3.5" />
+              </button>
             </div>
           </div>
         </div>
+      </div>
     </div>
     """
   end

@@ -104,11 +104,12 @@ defmodule SkillToSandbox.Pipeline.Runner do
   def handle_info(:resume_from_db, state) do
     run = Pipelines.get_run!(state.run_id)
 
-    state = %{state |
-      status: String.to_existing_atom(run.status),
-      sandbox_spec_id: run.sandbox_spec_id,
-      sandbox_id: run.sandbox_id,
-      step_timings: run.step_timings || %{}
+    state = %{
+      state
+      | status: String.to_existing_atom(run.status),
+        sandbox_spec_id: run.sandbox_spec_id,
+        sandbox_id: run.sandbox_id,
+        step_timings: run.step_timings || %{}
     }
 
     case state.status do
@@ -192,9 +193,7 @@ defmodule SkillToSandbox.Pipeline.Runner do
 
       # Unexpected
       {status, result} ->
-        Logger.warning(
-          "[Runner] Unexpected task result in #{status}: #{inspect(result)}"
-        )
+        Logger.warning("[Runner] Unexpected task result in #{status}: #{inspect(result)}")
 
         {:noreply, state}
     end
@@ -458,7 +457,12 @@ defmodule SkillToSandbox.Pipeline.Runner do
 
     Logger.info("[Runner] Run ##{state.run_id}: #{state.status} → #{new_status}")
 
-    %{state | status: new_status, error: error, step_started_at: System.monotonic_time(:millisecond)}
+    %{
+      state
+      | status: new_status,
+        error: error,
+        step_started_at: System.monotonic_time(:millisecond)
+    }
   end
 
   defp record_step_timing(state, step_name) do

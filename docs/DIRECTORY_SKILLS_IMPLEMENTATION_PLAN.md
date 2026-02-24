@@ -1,11 +1,13 @@
 # Directory-Based Skills Implementation Plan
 
-**Document Version:** 1.1  
+**Document Version:** 1.3  
 **Last Updated:** 2025-02-24  
 **Status:** Approved for Implementation  
 **Storage Strategy:** Option A — Store `file_tree` in database (JSON map)
 
 **Revision History:**
+- 1.3: Phase 4 complete — SkillLive.New URL (GitHubFetcher), ZIP upload, create_skill_with_parser directory/file
+- 1.2: Phase 3 complete — DependencyScanner, Parser.parse_directory, tests
 - 1.1: Added gaps analysis — Runner parse logic, ZIP handling, path stripping, binary files, package.json at repo root, implementation order fix, file size limits
 
 ---
@@ -718,16 +720,16 @@ Execute in this order to minimize integration issues:
    - [x] Add tests
    - [x] Optional: GITHUB_TOKEN support for rate limits
 
-3. **Phase 3: Parser and DependencyScanner**
-   - [ ] Implement DependencyScanner
-   - [ ] Implement Parser.parse_directory
-   - [ ] Add tests
+3. **Phase 3: Parser and DependencyScanner** ✅
+   - [x] Implement DependencyScanner
+   - [x] Implement Parser.parse_directory
+   - [x] Add tests
 
-4. **Phase 4: Upload flow**
-   - [ ] Update SkillLive.New: URL mode uses GitHubFetcher
-   - [ ] Update SkillLive.New: add ZIP upload support
-   - [ ] Update create_skill_with_parser for directory vs file
-   - [ ] Update allow_upload to accept .zip
+4. **Phase 4: Upload flow** ✅
+   - [x] Update SkillLive.New: URL mode uses GitHubFetcher
+   - [x] Update SkillLive.New: add ZIP upload support
+   - [x] Update create_skill_with_parser for directory vs file
+   - [x] Update allow_upload to accept .zip
 
 5. **Phase 5: Build pipeline**
    - [ ] Update BuildContext.assemble to accept skill, write skill/ dir
