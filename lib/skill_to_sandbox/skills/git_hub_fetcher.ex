@@ -288,8 +288,11 @@ defmodule SkillToSandbox.Skills.GitHubFetcher do
         content = body["content"]
 
         if encoding == "base64" and content do
+          # GitHub API may return base64 with newlines/whitespace; strip before decoding
+          base64_clean = String.replace(content, ~r/\s+/, "")
+
           decoded =
-            content
+            base64_clean
             |> Base.decode64!(padding: false)
             |> case do
               bin when is_binary(bin) ->

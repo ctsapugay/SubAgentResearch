@@ -1,11 +1,12 @@
 # Directory-Based Skills Implementation Plan
 
-**Document Version:** 1.5  
+**Document Version:** 1.6  
 **Last Updated:** 2025-02-24  
 **Status:** Approved for Implementation  
 **Storage Strategy:** Option A — Store `file_tree` in database (JSON map)
 
 **Revision History:**
+- 1.6: Phase 7 tests complete — Integration tests for directory skill and single-file backward compat (tagged :docker, run with `mix test --include docker`)
 - 1.5: Phase 6 complete — Analyzer uses DependencyScanner, directory skill prompts, merge_scanner_deps (Scanner wins)
 - 1.4: Phase 5 complete — BuildContext writes skill/ dir, DockerfileBuilder skill_copy/post_install blocks, Runner passes skill
 - 1.3: Phase 4 complete — SkillLive.New URL (GitHubFetcher), ZIP upload, create_skill_with_parser directory/file
@@ -744,8 +745,8 @@ Execute in this order to minimize integration issues:
    - [x] Update prompt for directory skills
 
 7. **Phase 7: Testing and polish**
-   - [ ] Integration test: agent-browser URL → sandbox
-   - [ ] Integration test: single-file backward compat
+   - [x] Integration test: agent-browser URL → sandbox
+   - [x] Integration test: single-file backward compat
    - [ ] Update SkillLive.Show to display file tree info for directory skills (optional)
    - [ ] Documentation updates
 
