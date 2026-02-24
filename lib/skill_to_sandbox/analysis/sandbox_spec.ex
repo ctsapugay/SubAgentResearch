@@ -21,6 +21,8 @@ defmodule SkillToSandbox.Analysis.SandboxSpec do
     field :eval_goals, JsonData, default: []
     field :dockerfile_content, :string
     field :status, :string, default: "draft"
+    field :skill_mount_path, :string, default: "/workspace/skill"
+    field :post_install_commands, JsonData, default: []
 
     belongs_to :skill, SkillToSandbox.Skills.Skill
     has_many :sandboxes, SkillToSandbox.Sandbox.Sandbox, foreign_key: :sandbox_spec_id
@@ -29,7 +31,7 @@ defmodule SkillToSandbox.Analysis.SandboxSpec do
   end
 
   @required_fields ~w(skill_id base_image status)a
-  @optional_fields ~w(system_packages runtime_deps tool_configs eval_goals dockerfile_content)a
+  @optional_fields ~w(system_packages runtime_deps tool_configs eval_goals dockerfile_content skill_mount_path post_install_commands)a
 
   @doc false
   def changeset(sandbox_spec, attrs) do
