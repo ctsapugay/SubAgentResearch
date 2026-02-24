@@ -157,6 +157,9 @@ defmodule SkillToSandbox.Sandbox.DockerfileBuilderTest do
       assert result =~ "chmod +x /tools/*.sh"
       assert result =~ "COPY tool_manifest.json /workspace/tool_manifest.json"
       assert result =~ ~s(ENV PATH="/tools:$PATH")
+      assert result =~ "COPY skill/ /workspace/skill/"
+      assert result =~ "chmod +x /workspace/skill/templates/*.sh"
+      assert result =~ "ENV SKILL_PATH=/workspace/skill"
     end
 
     test "includes label with skill_id" do
@@ -199,6 +202,51 @@ defmodule SkillToSandbox.Sandbox.DockerfileBuilderTest do
       result = DockerfileBuilder.build(spec)
 
       assert String.ends_with?(result, "\n")
+    end
+
+    test "includes skill copy block with SKILL_PATH" do
+      spec = build_spec()
+      result = DockerfileBuilder.build(spec)
+
+      assert result =~ "COPY skill/ /workspace/skill/"
+      assert result =~ "chmod +x /workspace/skill/templates/*.sh"
+      assert result =~ "ENV SKILL_PATH=/workspace/skill"
+    end
+
+    test "includes skill_mount_path when specified" do
+      spec = build_spec(%{skill_mount_path: "/app/skill"})
+      result = DockerfileBuilder.build(spec)
+
+      assert result =~ "COPY skill/ /app/skill/"
+      assert result =~ "chmod +x /app/skill/templates/*.sh"
+      assert result =~ "ENV SKILL_PATH=/app/skill"
+    end
+
+    test "includes post_install_block when post_install_commands is non-empty" do
+      spec = build_spec(%{post_install_commands: ["npx playwright install chromium"]})
+      result = DockerfileBuilder.build(spec)
+
+      assert result =~ "Post-install commands"
+      assert result =~ "RUN npx playwright install chromium"
+    end
+
+    test "includes multiple post_install_commands joined with &&" do
+      spec =
+        build_spec(%{
+          post_install_commands: ["npx playwright install chromium", "echo done"]
+        })
+
+      result = DockerfileBuilder.build(spec)
+
+      assert result =~ "RUN npx playwright install chromium && echo done"
+    end
+
+    test "omits post_install_block when post_install_commands is empty" do
+      spec = build_spec(%{post_install_commands: []})
+      result = DockerfileBuilder.build(spec)
+
+      refute result =~ "Post-install commands"
+      refute result =~ "RUN npx playwright"
     end
   end
 

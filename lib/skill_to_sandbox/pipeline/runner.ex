@@ -212,7 +212,15 @@ defmodule SkillToSandbox.Pipeline.Runner do
     state = transition(state, :parsing)
     skill = Skills.get_skill!(state.skill_id)
 
-    case Parser.parse(skill.raw_content) do
+    parse_result =
+      if skill.source_type == "directory" and is_map(skill.file_tree) and
+           map_size(skill.file_tree || %{}) > 0 do
+        Parser.parse_directory(skill.file_tree)
+      else
+        Parser.parse(skill.raw_content)
+      end
+
+    case parse_result do
       {:ok, parsed_data} ->
         # Update the skill's parsed_data if not already set
         if skill.parsed_data == nil || skill.parsed_data == %{} do
@@ -349,8 +357,9 @@ defmodule SkillToSandbox.Pipeline.Runner do
 
   defp execute_docker_build(spec, run_id) do
     tag = "sandbox-#{run_id}-#{:erlang.unique_integer([:positive])}"
+    skill = Skills.get_skill!(spec.skill_id)
 
-    with {:ok, context_dir, dockerfile_content} <- BuildContext.assemble(spec),
+    with {:ok, context_dir, dockerfile_content} <- BuildContext.assemble(spec, skill),
          # Store the generated Dockerfile content in the spec
          {:ok, _spec} <- Analysis.update_spec(spec, %{dockerfile_content: dockerfile_content}),
          {:ok, _build_output} <- Docker.build_image(context_dir, tag),

@@ -1,11 +1,13 @@
 # Directory-Based Skills Implementation Plan
 
-**Document Version:** 1.3  
+**Document Version:** 1.5  
 **Last Updated:** 2025-02-24  
 **Status:** Approved for Implementation  
 **Storage Strategy:** Option A — Store `file_tree` in database (JSON map)
 
 **Revision History:**
+- 1.5: Phase 6 complete — Analyzer uses DependencyScanner, directory skill prompts, merge_scanner_deps (Scanner wins)
+- 1.4: Phase 5 complete — BuildContext writes skill/ dir, DockerfileBuilder skill_copy/post_install blocks, Runner passes skill
 - 1.3: Phase 4 complete — SkillLive.New URL (GitHubFetcher), ZIP upload, create_skill_with_parser directory/file
 - 1.2: Phase 3 complete — DependencyScanner, Parser.parse_directory, tests
 - 1.1: Added gaps analysis — Runner parse logic, ZIP handling, path stripping, binary files, package.json at repo root, implementation order fix, file size limits
@@ -731,15 +733,15 @@ Execute in this order to minimize integration issues:
    - [x] Update create_skill_with_parser for directory vs file
    - [x] Update allow_upload to accept .zip
 
-5. **Phase 5: Build pipeline**
-   - [ ] Update BuildContext.assemble to accept skill, write skill/ dir
-   - [ ] Update DockerfileBuilder: skill_copy_block, post_install_block
-   - [ ] Update Runner.execute_docker_build to pass skill
-   - [ ] Add ENV SKILL_PATH to container
+5. **Phase 5: Build pipeline** ✅
+   - [x] Update BuildContext.assemble to accept skill, write skill/ dir
+   - [x] Update DockerfileBuilder: skill_copy_block, post_install_block
+   - [x] Update Runner.execute_docker_build to pass skill
+   - [x] Add ENV SKILL_PATH to container
 
-6. **Phase 6: Analyzer**
-   - [ ] Update Analyzer to use file_tree and DependencyScanner when available
-   - [ ] Update prompt for directory skills
+6. **Phase 6: Analyzer** ✅
+   - [x] Update Analyzer to use file_tree and DependencyScanner when available
+   - [x] Update prompt for directory skills
 
 7. **Phase 7: Testing and polish**
    - [ ] Integration test: agent-browser URL → sandbox

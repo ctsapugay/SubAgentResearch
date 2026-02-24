@@ -2,6 +2,20 @@ defmodule SkillToSandbox.Sandbox.BuildContextTest do
   use ExUnit.Case, async: true
 
   alias SkillToSandbox.Sandbox.BuildContext
+  alias SkillToSandbox.Skills.Skill
+
+  # Helper to build a skill struct for tests
+  defp build_skill(attrs \\ %{}) do
+    defaults = %{
+      id: 1,
+      name: "Test Skill",
+      raw_content: "# Test Skill\n\nSome content.",
+      source_type: "file",
+      file_tree: %{"SKILL.md" => "# Test Skill\n\nSome content."}
+    }
+
+    struct(Skill, Map.merge(defaults, attrs))
+  end
 
   # Helper to build a spec struct with the given overrides
   defp build_spec(attrs \\ %{}) do
@@ -37,7 +51,7 @@ defmodule SkillToSandbox.Sandbox.BuildContextTest do
   describe "assemble/1" do
     test "creates a build context directory with all expected files" do
       spec = build_spec()
-      assert {:ok, dir, _dockerfile} = BuildContext.assemble(spec)
+      assert {:ok, dir, _dockerfile} = BuildContext.assemble(spec, build_skill())
 
       on_exit(fn -> BuildContext.cleanup(dir) end)
 
@@ -50,11 +64,12 @@ defmodule SkillToSandbox.Sandbox.BuildContextTest do
       assert File.exists?(Path.join(dir, "tool_manifest.json"))
       assert File.exists?(Path.join(dir, "tools/cli_execution.sh"))
       assert File.exists?(Path.join(dir, "tools/web_search.sh"))
+      assert File.exists?(Path.join(dir, "skill/SKILL.md"))
     end
 
     test "Dockerfile contains correct content" do
       spec = build_spec()
-      assert {:ok, dir, dockerfile_content} = BuildContext.assemble(spec)
+      assert {:ok, dir, dockerfile_content} = BuildContext.assemble(spec, build_skill())
 
       on_exit(fn -> BuildContext.cleanup(dir) end)
 
@@ -66,7 +81,7 @@ defmodule SkillToSandbox.Sandbox.BuildContextTest do
 
     test "package.json is valid JSON for npm specs" do
       spec = build_spec()
-      assert {:ok, dir, _} = BuildContext.assemble(spec)
+      assert {:ok, dir, _} = BuildContext.assemble(spec, build_skill())
 
       on_exit(fn -> BuildContext.cleanup(dir) end)
 
@@ -86,7 +101,7 @@ defmodule SkillToSandbox.Sandbox.BuildContextTest do
           }
         })
 
-      assert {:ok, dir, _} = BuildContext.assemble(spec)
+      assert {:ok, dir, _} = BuildContext.assemble(spec, build_skill())
 
       on_exit(fn -> BuildContext.cleanup(dir) end)
 
@@ -100,7 +115,7 @@ defmodule SkillToSandbox.Sandbox.BuildContextTest do
 
     test "tool scripts are executable" do
       spec = build_spec()
-      assert {:ok, dir, _} = BuildContext.assemble(spec)
+      assert {:ok, dir, _} = BuildContext.assemble(spec, build_skill())
 
       on_exit(fn -> BuildContext.cleanup(dir) end)
 
@@ -112,7 +127,7 @@ defmodule SkillToSandbox.Sandbox.BuildContextTest do
 
     test "tool manifest is valid JSON" do
       spec = build_spec()
-      assert {:ok, dir, _} = BuildContext.assemble(spec)
+      assert {:ok, dir, _} = BuildContext.assemble(spec, build_skill())
 
       on_exit(fn -> BuildContext.cleanup(dir) end)
 
@@ -129,7 +144,7 @@ defmodule SkillToSandbox.Sandbox.BuildContextTest do
 
     test "tool manifest contains parameter schemas" do
       spec = build_spec()
-      assert {:ok, dir, _} = BuildContext.assemble(spec)
+      assert {:ok, dir, _} = BuildContext.assemble(spec, build_skill())
 
       on_exit(fn -> BuildContext.cleanup(dir) end)
 
@@ -151,7 +166,7 @@ defmodule SkillToSandbox.Sandbox.BuildContextTest do
 
     test "handles spec with no runtime deps" do
       spec = build_spec(%{runtime_deps: nil})
-      assert {:ok, dir, _} = BuildContext.assemble(spec)
+      assert {:ok, dir, _} = BuildContext.assemble(spec, build_skill())
 
       on_exit(fn -> BuildContext.cleanup(dir) end)
 
@@ -162,7 +177,7 @@ defmodule SkillToSandbox.Sandbox.BuildContextTest do
 
     test "returns dockerfile content as third element" do
       spec = build_spec()
-      assert {:ok, dir, dockerfile} = BuildContext.assemble(spec)
+      assert {:ok, dir, dockerfile} = BuildContext.assemble(spec, build_skill())
 
       on_exit(fn -> BuildContext.cleanup(dir) end)
 
@@ -174,7 +189,7 @@ defmodule SkillToSandbox.Sandbox.BuildContextTest do
   describe "cleanup/1" do
     test "removes the build context directory" do
       spec = build_spec()
-      assert {:ok, dir, _} = BuildContext.assemble(spec)
+      assert {:ok, dir, _} = BuildContext.assemble(spec, build_skill())
 
       assert File.dir?(dir)
       assert :ok = BuildContext.cleanup(dir)
@@ -189,7 +204,7 @@ defmodule SkillToSandbox.Sandbox.BuildContextTest do
   describe "list_files/1" do
     test "lists all files in the build context" do
       spec = build_spec()
-      assert {:ok, dir, _} = BuildContext.assemble(spec)
+      assert {:ok, dir, _} = BuildContext.assemble(spec, build_skill())
 
       on_exit(fn -> BuildContext.cleanup(dir) end)
 
@@ -199,6 +214,57 @@ defmodule SkillToSandbox.Sandbox.BuildContextTest do
       assert "tool_manifest.json" in files
       assert "tools/cli_execution.sh" in files
       assert "tools/web_search.sh" in files
+      assert "skill/SKILL.md" in files
+    end
+  end
+
+  describe "skill directory" do
+    test "writes single-file skill as skill/SKILL.md" do
+      skill = build_skill(%{file_tree: %{"SKILL.md" => "# My Skill\n\nContent."}})
+      spec = build_spec()
+      assert {:ok, dir, _} = BuildContext.assemble(spec, skill)
+
+      on_exit(fn -> BuildContext.cleanup(dir) end)
+
+      skill_md = Path.join(dir, "skill/SKILL.md")
+      assert File.exists?(skill_md)
+      assert File.read!(skill_md) == "# My Skill\n\nContent."
+    end
+
+    test "writes directory skill with full file tree and makes .sh executable" do
+      skill =
+        build_skill(%{
+          source_type: "directory",
+          file_tree: %{
+            "SKILL.md" => "# Agent Browser",
+            "references/commands.md" => "# Commands",
+            "templates/form-automation.sh" => "#!/bin/bash\necho done"
+          }
+        })
+
+      spec = build_spec()
+      assert {:ok, dir, _} = BuildContext.assemble(spec, skill)
+
+      on_exit(fn -> BuildContext.cleanup(dir) end)
+
+      assert File.read!(Path.join(dir, "skill/SKILL.md")) == "# Agent Browser"
+      assert File.read!(Path.join(dir, "skill/references/commands.md")) == "# Commands"
+
+      assert File.read!(Path.join(dir, "skill/templates/form-automation.sh")) ==
+               "#!/bin/bash\necho done"
+
+      %{mode: mode} = File.stat!(Path.join(dir, "skill/templates/form-automation.sh"))
+      assert Bitwise.band(mode, 0o111) != 0
+    end
+
+    test "writes skill/SKILL.md from raw_content when file_tree is empty (legacy)" do
+      skill = build_skill(%{file_tree: %{}, raw_content: "# Legacy Skill\n\nOld content."})
+      spec = build_spec()
+      assert {:ok, dir, _} = BuildContext.assemble(spec, skill)
+
+      on_exit(fn -> BuildContext.cleanup(dir) end)
+
+      assert File.read!(Path.join(dir, "skill/SKILL.md")) == "# Legacy Skill\n\nOld content."
     end
   end
 end

@@ -14,6 +14,7 @@ defmodule SkillToSandbox.Analysis.Analyzer do
 
   alias SkillToSandbox.Analysis
   alias SkillToSandbox.Analysis.LLMClient
+  alias SkillToSandbox.Skills.DependencyScanner
   alias SkillToSandbox.Skills.Skill
 
   @system_prompt """
@@ -58,17 +59,19 @@ defmodule SkillToSandbox.Analysis.Analyzer do
   Returns `{:ok, %SandboxSpec{}}` on success or `{:error, reason}` on failure.
   """
   def analyze(%Skill{} = skill) do
-    user_prompt = build_user_prompt(skill)
+    scanner_result = DependencyScanner.scan(skill.file_tree || %{})
+    user_prompt = build_user_prompt(skill, scanner_result)
 
     Logger.info("[Analyzer] Starting analysis for skill ##{skill.id}: #{skill.name}")
 
     with {:ok, raw_response} <- LLMClient.chat(@system_prompt, user_prompt),
          {:ok, spec_map} <- extract_json(raw_response),
-         {:ok, validated} <- validate_spec(spec_map) do
+         {:ok, validated} <- validate_spec(spec_map),
+         merged <- merge_scanner_deps(validated, scanner_result) do
       Logger.info("[Analyzer] Analysis successful for skill ##{skill.id}")
 
       Analysis.create_spec(
-        Map.merge(validated, %{
+        Map.merge(merged, %{
           skill_id: skill.id,
           status: "draft"
         })
@@ -129,7 +132,7 @@ defmodule SkillToSandbox.Analysis.Analyzer do
 
   # -- Prompt construction --
 
-  defp build_user_prompt(%Skill{} = skill) do
+  defp build_user_prompt(%Skill{} = skill, scanner_result) do
     parsed = skill.parsed_data || %{}
 
     tools = format_list(parsed["mentioned_tools"])
@@ -137,6 +140,10 @@ defmodule SkillToSandbox.Analysis.Analyzer do
     deps = format_list(parsed["mentioned_dependencies"])
     name = skill.name || "Unknown"
     description = skill.description || parsed["description"] || "No description"
+
+    scanner_section = format_scanner_section(scanner_result)
+    directory_section = format_directory_section(skill)
+    dependency_instruction = format_dependency_instruction(scanner_result)
 
     """
     Here is the skill definition:
@@ -146,11 +153,13 @@ defmodule SkillToSandbox.Analysis.Analyzer do
     Detected tools: #{tools}
     Detected frameworks: #{frameworks}
     Detected dependencies: #{deps}
+    #{scanner_section}#{directory_section}#{dependency_instruction}
 
     Full skill content:
     ---
     #{skill.raw_content}
     ---
+    #{additional_file_content(skill)}
 
     Produce a JSON object matching this exact structure:
     {
@@ -181,7 +190,9 @@ defmodule SkillToSandbox.Analysis.Analyzer do
         "Hard: ...",
         "Hard: ...",
         "Hard: ..."
-      ]
+      ],
+      "post_install_commands": []
+    }
     }
     """
   end
@@ -190,6 +201,123 @@ defmodule SkillToSandbox.Analysis.Analyzer do
   defp format_list([]), do: "(none detected)"
   defp format_list(list) when is_list(list), do: Enum.join(list, ", ")
   defp format_list(_), do: "(none detected)"
+
+  defp format_scanner_section(%{
+         npm: npm,
+         pip: pip,
+         package_json_path: pkg_path,
+         requirements_path: req_path
+       }) do
+    has_npm = is_map(npm) and map_size(npm) > 0
+    has_pip = is_map(pip) and map_size(pip) > 0
+
+    if pkg_path || req_path do
+      lines = []
+
+      lines =
+        if pkg_path && has_npm do
+          pkgs = Enum.map_join(npm, ", ", fn {k, v} -> "#{k}: #{v}" end)
+          lines ++ ["Scanned package.json (#{pkg_path}): #{pkgs}"]
+        else
+          lines
+        end
+
+      lines =
+        if req_path && has_pip do
+          pkgs = Enum.map_join(pip, ", ", fn {k, v} -> "#{k}#{if v, do: " #{v}", else: ""}" end)
+          lines ++ ["Scanned requirements.txt (#{req_path}): #{pkgs}"]
+        else
+          lines
+        end
+
+      if lines != [] do
+        "\nScanned dependencies from skill file tree:\n" <> Enum.join(lines, "\n") <> "\n"
+      else
+        ""
+      end
+    else
+      ""
+    end
+  end
+
+  defp format_directory_section(%Skill{source_type: "directory", file_tree: file_tree})
+       when is_map(file_tree) and map_size(file_tree) > 0 do
+    file_list = Map.keys(file_tree) |> Enum.sort() |> Enum.join(", ")
+
+    "\nThis skill has multiple files: #{file_list}\n" <>
+      "The skill directory will be mounted at SKILL_PATH (/workspace/skill) in the container. " <>
+      "Templates and references are available for the agent to use.\n"
+  end
+
+  defp format_directory_section(_), do: ""
+
+  defp format_dependency_instruction(%{package_json_path: pkg_path, requirements_path: req_path})
+       when (is_binary(pkg_path) and pkg_path != "") or (is_binary(req_path) and req_path != "") do
+    "\nIMPORTANT: The skill includes package.json or requirements.txt in its file tree. " <>
+      "PREFER those exact dependencies in runtime_deps. " <>
+      "You may add system packages, tool configs, and post_install_commands (e.g. 'npx playwright install chromium') as needed.\n"
+  end
+
+  defp format_dependency_instruction(_), do: ""
+
+  defp additional_file_content(%Skill{source_type: "directory", file_tree: file_tree})
+       when is_map(file_tree) and map_size(file_tree) > 0 do
+    # Include references/*.md content (truncate if very long)
+    ref_files =
+      file_tree
+      |> Enum.filter(fn {path, _} -> path != "SKILL.md" and String.ends_with?(path, ".md") end)
+      |> Enum.take(5)
+
+    if ref_files == [] do
+      ""
+    else
+      sections =
+        Enum.map(ref_files, fn {path, content} ->
+          truncated =
+            if String.length(content) > 4000,
+              do: String.slice(content, 0, 4000) <> "\n...[truncated]",
+              else: content
+
+          "\n---\nFile: #{path}\n---\n#{truncated}"
+        end)
+
+      "\nAdditional reference files:\n" <> Enum.join(sections, "\n")
+    end
+  end
+
+  defp additional_file_content(_), do: ""
+
+  # Merge Scanner's dependencies with LLM output. Scanner wins on conflicts.
+  # Exposed for testing.
+  @doc false
+  def merge_scanner_deps(validated, %{
+        npm: npm,
+        pip: pip,
+        package_json_path: pkg_path,
+        requirements_path: req_path
+      }) do
+    runtime_deps = validated.runtime_deps || %{}
+    manager = runtime_deps["manager"] || "npm"
+    llm_packages = runtime_deps["packages"] || %{}
+
+    {merged_manager, merged_packages} =
+      cond do
+        is_binary(pkg_path) and pkg_path != "" and is_map(npm) and map_size(npm) > 0 ->
+          # Scanner found package.json: use npm as base, add LLM packages Scanner missed. Scanner wins on conflicts.
+          merged = Map.merge(llm_packages, npm)
+          {"npm", merged}
+
+        is_binary(req_path) and req_path != "" and is_map(pip) and map_size(pip) > 0 ->
+          # Scanner found requirements.txt: use pip as base, add LLM packages Scanner missed. Scanner wins on conflicts.
+          merged = Map.merge(llm_packages, pip)
+          {"pip", merged}
+
+        true ->
+          {manager, llm_packages}
+      end
+
+    %{validated | runtime_deps: %{"manager" => merged_manager, "packages" => merged_packages}}
+  end
 
   # -- Markdown fence stripping --
 
@@ -273,12 +401,28 @@ defmodule SkillToSandbox.Analysis.Analyzer do
   # -- Normalize spec map into schema-compatible attrs --
 
   defp normalize_spec(spec_map) do
-    %{
+    base = %{
       base_image: spec_map["base_image"],
       system_packages: spec_map["system_packages"],
       runtime_deps: spec_map["runtime_deps"],
       tool_configs: spec_map["tool_configs"],
       eval_goals: spec_map["eval_goals"]
     }
+
+    base =
+      if is_list(spec_map["post_install_commands"]) do
+        Map.put(base, :post_install_commands, spec_map["post_install_commands"])
+      else
+        base
+      end
+
+    base =
+      if is_binary(spec_map["skill_mount_path"]) and spec_map["skill_mount_path"] != "" do
+        Map.put(base, :skill_mount_path, spec_map["skill_mount_path"])
+      else
+        base
+      end
+
+    base
   end
 end

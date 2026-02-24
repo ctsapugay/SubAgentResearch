@@ -16,6 +16,7 @@ defmodule SkillToSandbox.Sandbox.BuildContext do
 
   alias SkillToSandbox.Analysis.SandboxSpec
   alias SkillToSandbox.Sandbox.DockerfileBuilder
+  alias SkillToSandbox.Skills.Skill
   alias SkillToSandbox.Tools.Manifest
 
   @tool_modules Manifest.tool_modules()
@@ -23,10 +24,15 @@ defmodule SkillToSandbox.Sandbox.BuildContext do
   @doc """
   Assemble a complete Docker build context directory.
 
-  Returns `{:ok, context_dir_path}` on success or `{:error, reason}` on failure.
-  The returned path is a temporary directory that should be cleaned up with `cleanup/1`.
+  Accepts a `%SandboxSpec{}` and `%Skill{}`. The skill's file tree (or raw_content
+  for single-file skills) is written into a `skill/` subdirectory so it can be
+  copied into the container at the configured mount path.
+
+  Returns `{:ok, context_dir_path, dockerfile_content}` on success or
+  `{:error, reason}` on failure. The returned path is a temporary directory that
+  should be cleaned up with `cleanup/1`.
   """
-  def assemble(%SandboxSpec{} = spec) do
+  def assemble(%SandboxSpec{} = spec, %Skill{} = skill) do
     dir = build_dir_path()
     File.mkdir_p!(dir)
 
@@ -43,6 +49,9 @@ defmodule SkillToSandbox.Sandbox.BuildContext do
 
       # 4. Write tool manifest
       File.write!(Path.join(dir, "tool_manifest.json"), Manifest.generate())
+
+      # 5. Write skill directory (full file_tree or single SKILL.md from raw_content)
+      write_skill_directory(dir, skill)
 
       Logger.info("[BuildContext] Assembled build context at #{dir}")
 
@@ -106,6 +115,31 @@ defmodule SkillToSandbox.Sandbox.BuildContext do
       File.write!(script_path, tool.container_setup_script())
       # Make executable
       File.chmod!(script_path, 0o755)
+    end
+  end
+
+  defp write_skill_directory(dir, %Skill{} = skill) do
+    skill_dir = Path.join(dir, "skill")
+    File.mkdir_p!(skill_dir)
+
+    file_tree = skill.file_tree || %{}
+
+    if is_map(file_tree) and map_size(file_tree) > 0 do
+      # Directory skill: write full file tree
+      for {relative_path, content} <- file_tree do
+        full_path = Path.join(skill_dir, relative_path)
+        full_path |> Path.dirname() |> File.mkdir_p!()
+        File.write!(full_path, content)
+
+        # Make .sh files executable (e.g., templates/*.sh)
+        if String.ends_with?(relative_path, ".sh") do
+          File.chmod!(full_path, 0o755)
+        end
+      end
+    else
+      # Single-file or legacy: write SKILL.md from raw_content
+      skill_md_path = Path.join(skill_dir, "SKILL.md")
+      File.write!(skill_md_path, skill.raw_content)
     end
   end
 end
