@@ -104,11 +104,12 @@ defmodule SkillToSandbox.Pipeline.Runner do
   def handle_info(:resume_from_db, state) do
     run = Pipelines.get_run!(state.run_id)
 
-    state = %{state |
-      status: String.to_existing_atom(run.status),
-      sandbox_spec_id: run.sandbox_spec_id,
-      sandbox_id: run.sandbox_id,
-      step_timings: run.step_timings || %{}
+    state = %{
+      state
+      | status: String.to_existing_atom(run.status),
+        sandbox_spec_id: run.sandbox_spec_id,
+        sandbox_id: run.sandbox_id,
+        step_timings: run.step_timings || %{}
     }
 
     case state.status do
@@ -192,9 +193,7 @@ defmodule SkillToSandbox.Pipeline.Runner do
 
       # Unexpected
       {status, result} ->
-        Logger.warning(
-          "[Runner] Unexpected task result in #{status}: #{inspect(result)}"
-        )
+        Logger.warning("[Runner] Unexpected task result in #{status}: #{inspect(result)}")
 
         {:noreply, state}
     end
@@ -213,7 +212,15 @@ defmodule SkillToSandbox.Pipeline.Runner do
     state = transition(state, :parsing)
     skill = Skills.get_skill!(state.skill_id)
 
-    case Parser.parse(skill.raw_content) do
+    parse_result =
+      if skill.source_type == "directory" and is_map(skill.file_tree) and
+           map_size(skill.file_tree || %{}) > 0 do
+        Parser.parse_directory(skill.file_tree)
+      else
+        Parser.parse(skill.raw_content)
+      end
+
+    case parse_result do
       {:ok, parsed_data} ->
         # Update the skill's parsed_data if not already set
         if skill.parsed_data == nil || skill.parsed_data == %{} do
@@ -350,8 +357,9 @@ defmodule SkillToSandbox.Pipeline.Runner do
 
   defp execute_docker_build(spec, run_id) do
     tag = "sandbox-#{run_id}-#{:erlang.unique_integer([:positive])}"
+    skill = Skills.get_skill!(spec.skill_id)
 
-    with {:ok, context_dir, dockerfile_content} <- BuildContext.assemble(spec),
+    with {:ok, context_dir, dockerfile_content} <- BuildContext.assemble(spec, skill),
          # Store the generated Dockerfile content in the spec
          {:ok, _spec} <- Analysis.update_spec(spec, %{dockerfile_content: dockerfile_content}),
          {:ok, _build_output} <- Docker.build_image(context_dir, tag),
@@ -458,7 +466,12 @@ defmodule SkillToSandbox.Pipeline.Runner do
 
     Logger.info("[Runner] Run ##{state.run_id}: #{state.status} → #{new_status}")
 
-    %{state | status: new_status, error: error, step_started_at: System.monotonic_time(:millisecond)}
+    %{
+      state
+      | status: new_status,
+        error: error,
+        step_started_at: System.monotonic_time(:millisecond)
+    }
   end
 
   defp record_step_timing(state, step_name) do

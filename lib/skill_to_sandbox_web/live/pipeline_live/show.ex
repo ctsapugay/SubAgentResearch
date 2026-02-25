@@ -304,7 +304,10 @@ defmodule SkillToSandboxWeb.PipelineLive.Show do
     if name != "" do
       spec = socket.assigns.spec
       current_packages = get_in(spec.runtime_deps, ["packages"]) || %{}
-      new_packages = Map.put(current_packages, name, if(version == "", do: "latest", else: version))
+
+      new_packages =
+        Map.put(current_packages, name, if(version == "", do: "latest", else: version))
+
       new_runtime_deps = Map.put(spec.runtime_deps, "packages", new_packages)
 
       case Analysis.update_spec(spec, %{runtime_deps: new_runtime_deps}) do
@@ -462,8 +465,7 @@ defmodule SkillToSandboxWeb.PipelineLive.Show do
                   href={"/sandboxes/#{@active_run.sandbox_id}"}
                   class="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:text-primary/80 mt-3 transition-colors"
                 >
-                  <.icon name="hero-arrow-top-right-on-square-micro" class="size-4" />
-                  View Sandbox
+                  <.icon name="hero-arrow-top-right-on-square-micro" class="size-4" /> View Sandbox
                 </a>
               <% end %>
             </div>

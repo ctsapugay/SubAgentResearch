@@ -80,7 +80,9 @@ defmodule SkillToSandbox.Sandbox.Monitor do
 
   @impl true
   def init(%{sandbox_id: sandbox_id, container_id: container_id}) do
-    Logger.info("[Monitor] Starting monitor for sandbox ##{sandbox_id} (#{truncate_id(container_id)})")
+    Logger.info(
+      "[Monitor] Starting monitor for sandbox ##{sandbox_id} (#{truncate_id(container_id)})"
+    )
 
     state = %__MODULE__{
       sandbox_id: sandbox_id,
@@ -124,9 +126,7 @@ defmodule SkillToSandbox.Sandbox.Monitor do
 
   # Port closed (container stopped or logs ended)
   def handle_info({port, {:exit_status, exit_code}}, %{log_port: port} = state) do
-    Logger.info(
-      "[Monitor] Log port closed for sandbox ##{state.sandbox_id} (exit: #{exit_code})"
-    )
+    Logger.info("[Monitor] Log port closed for sandbox ##{state.sandbox_id} (exit: #{exit_code})")
 
     {:noreply, %{state | log_port: nil}}
   end
@@ -259,7 +259,10 @@ defmodule SkillToSandbox.Sandbox.Monitor do
 
   @impl true
   def terminate(reason, state) do
-    Logger.info("[Monitor] Monitor for sandbox ##{state.sandbox_id} terminating: #{inspect(reason)}")
+    Logger.info(
+      "[Monitor] Monitor for sandbox ##{state.sandbox_id} terminating: #{inspect(reason)}"
+    )
+
     close_log_port(state)
     :ok
   end

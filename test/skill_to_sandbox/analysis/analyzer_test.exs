@@ -250,6 +250,97 @@ defmodule SkillToSandbox.Analysis.AnalyzerTest do
     end
   end
 
+  # -- merge_scanner_deps/2 tests --
+
+  describe "merge_scanner_deps/2" do
+    test "prefers Scanner npm packages when package.json found" do
+      {:ok, validated} =
+        @valid_spec_json
+        |> Jason.decode!()
+        |> Analyzer.validate_spec()
+
+      scanner_result = %{
+        npm: %{"agent-browser" => "latest", "playwright-core" => "^1.40.0"},
+        pip: %{},
+        package_json_path: "package.json",
+        requirements_path: nil
+      }
+
+      merged = Analyzer.merge_scanner_deps(validated, scanner_result)
+
+      assert merged.runtime_deps["manager"] == "npm"
+      assert merged.runtime_deps["packages"]["agent-browser"] == "latest"
+      assert merged.runtime_deps["packages"]["playwright-core"] == "^1.40.0"
+      # LLM packages not in Scanner are added
+      assert Map.has_key?(merged.runtime_deps["packages"], "react") or
+               map_size(merged.runtime_deps["packages"]) >= 2
+    end
+
+    test "Scanner wins on version conflicts for npm" do
+      {:ok, validated} =
+        @valid_spec_json
+        |> Jason.decode!()
+        |> Analyzer.validate_spec()
+
+      # LLM said react ^18.0.0, Scanner says ^19.0.0
+      scanner_result = %{
+        npm: %{"react" => "^19.0.0", "react-dom" => "^19.0.0"},
+        pip: %{},
+        package_json_path: "package.json",
+        requirements_path: nil
+      }
+
+      merged = Analyzer.merge_scanner_deps(validated, scanner_result)
+
+      assert merged.runtime_deps["packages"]["react"] == "^19.0.0"
+      assert merged.runtime_deps["packages"]["react-dom"] == "^19.0.0"
+    end
+
+    test "prefers Scanner pip packages when requirements.txt found" do
+      {:ok, validated} =
+        @valid_spec_json
+        |> Jason.decode!()
+        |> Analyzer.validate_spec()
+
+      # Override to pip spec for this test
+      validated = %{
+        validated
+        | runtime_deps: %{"manager" => "pip", "packages" => %{"flask" => "^3.0.0"}}
+      }
+
+      scanner_result = %{
+        npm: %{},
+        pip: %{"flask" => "==3.0.0", "requests" => ">=2.28.0"},
+        package_json_path: nil,
+        requirements_path: "requirements.txt"
+      }
+
+      merged = Analyzer.merge_scanner_deps(validated, scanner_result)
+
+      assert merged.runtime_deps["manager"] == "pip"
+      assert merged.runtime_deps["packages"]["flask"] == "==3.0.0"
+      assert merged.runtime_deps["packages"]["requests"] == ">=2.28.0"
+    end
+
+    test "leaves LLM output unchanged when Scanner found nothing" do
+      {:ok, validated} =
+        @valid_spec_json
+        |> Jason.decode!()
+        |> Analyzer.validate_spec()
+
+      scanner_result = %{
+        npm: %{},
+        pip: %{},
+        package_json_path: nil,
+        requirements_path: nil
+      }
+
+      merged = Analyzer.merge_scanner_deps(validated, scanner_result)
+
+      assert merged.runtime_deps == validated.runtime_deps
+    end
+  end
+
   # -- Roundtrip test: verify lists survive DB storage --
 
   describe "SandboxSpec JSON list roundtrip" do

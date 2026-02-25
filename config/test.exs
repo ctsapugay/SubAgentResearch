@@ -36,3 +36,7 @@ config :phoenix_live_view,
 # Sort query params output of verified routes for robust url comparisons
 config :phoenix,
   sort_verified_routes_query_params: true
+
+# Exclude Docker-dependent integration tests by default.
+# Run with: mix test --include docker
+config :ex_unit, exclude: [docker: true]

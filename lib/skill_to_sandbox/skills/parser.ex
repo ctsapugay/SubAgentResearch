@@ -204,4 +204,108 @@ defmodule SkillToSandbox.Skills.Parser do
       _ -> nil
     end
   end
+
+  # -- Directory parsing --
+
+  @doc """
+  Parses a directory file tree. Finds SKILL.md (or first .md at root), parses all .md and .sh files,
+  and merges extracted tools, frameworks, dependencies, sections.
+
+  Returns `{:ok, parsed_map}` with same structure as parse/1, or `{:error, reason}` on failure.
+
+  ## Example
+
+      file_tree = %{
+        "SKILL.md" => "---\\nname: my-skill\\n---\\n# My Skill\\nUses React and Playwright.",
+        "references/commands.md" => "## Commands\\nUse the terminal for CLI execution."
+      }
+      Parser.parse_directory(file_tree)
+      # => {:ok, %{"name" => "my-skill", "sections" => [...], "mentioned_tools" => [...], ...}}
+  """
+  @spec parse_directory(file_tree :: %{String.t() => String.t()}) ::
+          {:ok, map()} | {:error, atom()}
+  def parse_directory(nil), do: {:error, :empty_content}
+
+  def parse_directory(file_tree) when is_map(file_tree) do
+    if map_size(file_tree) == 0 do
+      {:error, :empty_content}
+    else
+      primary_path = find_primary_file(file_tree)
+      primary_content = primary_path && Map.get(file_tree, primary_path)
+
+      if primary_content do
+        parsed = parse_directory_impl(file_tree, primary_path, primary_content)
+        {:ok, parsed}
+      else
+        {:error, :no_skill_md}
+      end
+    end
+  end
+
+  defp find_primary_file(file_tree) do
+    cond do
+      Map.has_key?(file_tree, "SKILL.md") ->
+        "SKILL.md"
+
+      true ->
+        file_tree
+        |> Map.keys()
+        |> Enum.filter(fn path ->
+          String.ends_with?(String.downcase(path), ".md") and not String.contains?(path, "/")
+        end)
+        |> Enum.sort()
+        |> List.first()
+    end
+  end
+
+  defp md_or_sh_file?(path) do
+    ext = Path.extname(path) |> String.downcase()
+    ext in [".md", ".sh"]
+  end
+
+  defp parse_directory_impl(file_tree, _primary_path, primary_content) do
+    # Parse primary for frontmatter (name, description)
+    meta =
+      case extract_frontmatter(primary_content) do
+        {:ok, m, _} -> m
+        _ -> %{}
+      end
+
+    # Collect and merge from all .md and .sh files
+    {sections, tools, frameworks, deps, bodies} =
+      file_tree
+      |> Enum.filter(fn {path, content} ->
+        md_or_sh_file?(path) and is_binary(content) and String.trim(content) != ""
+      end)
+      |> Enum.reduce({[], [], [], [], []}, fn {_path, content}, {secs, tls, frms, dps, bds} ->
+        {_m, body} =
+          case extract_frontmatter(content) do
+            {:ok, _, b} -> {%{}, b}
+            _ -> {%{}, content}
+          end
+
+        new_secs = secs ++ extract_sections(body)
+        new_tls = tls ++ detect_tools(body)
+        new_frms = frms ++ detect_frameworks(body)
+        new_dps = dps ++ detect_dependencies(body)
+        new_bds = bds ++ [body]
+
+        {new_secs, new_tls, new_frms, new_dps, new_bds}
+      end)
+
+    name = meta["name"] || extract_first_heading(primary_content)
+    description = meta["description"]
+    raw_guidelines = bodies |> Enum.join("\n\n") |> String.trim()
+
+    %{
+      "name" => name,
+      "description" => description,
+      "sections" => Enum.uniq(sections),
+      "mentioned_tools" => Enum.uniq(tools),
+      "mentioned_frameworks" => Enum.uniq(frameworks),
+      "mentioned_dependencies" => Enum.uniq(deps),
+      "raw_guidelines" => raw_guidelines,
+      "frontmatter" => meta
+    }
+  end
 end

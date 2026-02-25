@@ -27,7 +27,9 @@ defmodule SkillToSandbox.Pipeline.RunnerTest do
 
   setup do
     # Kill any lingering runner processes from previous tests
-    Registry.select(SkillToSandbox.PipelineRegistry, [{{:"$1", :"$2", :_}, [], [{{:"$1", :"$2"}}]}])
+    Registry.select(SkillToSandbox.PipelineRegistry, [
+      {{:"$1", :"$2", :_}, [], [{{:"$1", :"$2"}}]}
+    ])
     |> Enum.each(fn {_key, pid} ->
       if Process.alive?(pid), do: Process.exit(pid, :kill)
     end)

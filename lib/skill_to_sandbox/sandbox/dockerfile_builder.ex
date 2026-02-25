@@ -27,7 +27,9 @@ defmodule SkillToSandbox.Sandbox.DockerfileBuilder do
       system_packages_block(spec),
       workdir_line(),
       runtime_deps_block(spec),
+      post_install_block(spec),
       tool_setup_block(),
+      skill_copy_block(spec),
       env_block(spec),
       entrypoint_line()
     ]
@@ -110,12 +112,34 @@ defmodule SkillToSandbox.Sandbox.DockerfileBuilder do
 
   defp runtime_deps_block(_), do: nil
 
+  defp post_install_block(%{post_install_commands: commands})
+       when is_list(commands) and commands != [] do
+    joined = Enum.join(commands, " && ")
+    "# Post-install commands (e.g., playwright install)\n" <> "RUN #{joined}"
+  end
+
+  defp post_install_block(_), do: nil
+
   defp tool_setup_block do
     "# Tool scripts and manifest\n" <>
       "COPY tools/ /tools/\n" <>
       "RUN chmod +x /tools/*.sh\n" <>
       "COPY tool_manifest.json /workspace/tool_manifest.json\n" <>
       "ENV PATH=\"/tools:$PATH\""
+  end
+
+  defp skill_copy_block(%{skill_mount_path: mount_path}) when is_binary(mount_path) do
+    "# Skill directory (references, templates, etc.)\n" <>
+      "COPY skill/ #{mount_path}/\n" <>
+      "RUN chmod +x #{mount_path}/templates/*.sh 2>/dev/null || true\n" <>
+      "ENV SKILL_PATH=#{mount_path}"
+  end
+
+  defp skill_copy_block(_) do
+    "# Skill directory (references, templates, etc.)\n" <>
+      "COPY skill/ /workspace/skill/\n" <>
+      "RUN chmod +x /workspace/skill/templates/*.sh 2>/dev/null || true\n" <>
+      "ENV SKILL_PATH=/workspace/skill"
   end
 
   defp env_block(%{tool_configs: %{"cli" => cli_config}}) when is_map(cli_config) do
