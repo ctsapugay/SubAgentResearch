@@ -19,12 +19,20 @@ defmodule SkillToSandboxWeb.SkillLive.Index do
   @impl true
   def handle_event("delete", %{"id" => id}, socket) do
     skill = Skills.get_skill!(id)
-    {:ok, _} = Skills.delete_skill(skill)
 
-    {:noreply,
-     socket
-     |> put_flash(:info, "Skill \"#{skill.name}\" deleted.")
-     |> assign(:skills, Skills.list_skills())}
+    case Skills.delete_skill(skill) do
+      {:ok, _} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Skill \"#{skill.name}\" deleted.")
+         |> assign(:skills, Skills.list_skills())}
+
+      {:error, _changeset} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "Could not delete skill \"#{skill.name}\".")
+         |> assign(:skills, Skills.list_skills())}
+    end
   end
 
   @impl true

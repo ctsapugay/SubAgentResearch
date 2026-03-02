@@ -22,6 +22,16 @@ defmodule SkillToSandbox.Sandboxes do
   end
 
   @doc """
+  Gets a single sandbox. Returns nil if not found.
+  """
+  def get_sandbox(id) do
+    case Repo.get(Sandbox, id) do
+      nil -> nil
+      sandbox -> Repo.preload(sandbox, sandbox_spec: :skill)
+    end
+  end
+
+  @doc """
   Gets a single sandbox. Raises `Ecto.NoResultsError` if not found.
   """
   def get_sandbox!(id) do
@@ -53,6 +63,20 @@ defmodule SkillToSandbox.Sandboxes do
   """
   def delete_sandbox(%Sandbox{} = sandbox) do
     Repo.delete(sandbox)
+  end
+
+  @doc """
+  Deletes all sandboxes that reference any of the given sandbox spec IDs.
+  Use this before deleting sandbox specs to avoid NOT NULL constraint violations.
+  """
+  def delete_sandboxes_for_spec_ids(spec_ids) when is_list(spec_ids) do
+    if spec_ids == [] do
+      {0, nil}
+    else
+      Sandbox
+      |> where([s], s.sandbox_spec_id in ^spec_ids)
+      |> Repo.delete_all()
+    end
   end
 
   @doc """

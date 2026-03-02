@@ -341,6 +341,54 @@ defmodule SkillToSandbox.Analysis.AnalyzerTest do
     end
   end
 
+  # -- allowed-tools prompt section --
+
+  describe "user_prompt_for_skill with allowed-tools" do
+    test "includes allowed-tools instruction when parsed_data has frontmatter" do
+      skill = %SkillToSandbox.Skills.Skill{
+        id: 1,
+        name: "agent-browser",
+        description: "Browser automation",
+        raw_content: "# Agent Browser\n\nContent here.",
+        parsed_data: %{
+          "name" => "agent-browser",
+          "mentioned_tools" => ["cli_execution"],
+          "mentioned_frameworks" => [],
+          "mentioned_dependencies" => [],
+          "frontmatter" => %{
+            "allowed-tools" => "Bash(npx agent-browser:*), Bash(agent-browser:*)"
+          }
+        },
+        source_type: "file"
+      }
+
+      prompt = Analyzer.user_prompt_for_skill(skill)
+
+      assert prompt =~ "allowed-tools"
+      assert prompt =~ "agent-browser"
+      assert prompt =~ "Bash(npx agent-browser"
+      assert prompt =~ "Extract any npm package names"
+    end
+
+    test "omits allowed-tools section when frontmatter has no allowed-tools" do
+      skill = %SkillToSandbox.Skills.Skill{
+        id: 2,
+        name: "frontend",
+        raw_content: "# Frontend",
+        parsed_data: %{
+          "frontmatter" => %{},
+          "mentioned_dependencies" => ["React"]
+        },
+        source_type: "file"
+      }
+
+      prompt = Analyzer.user_prompt_for_skill(skill)
+
+      refute prompt =~ "allowed-tools:"
+      refute prompt =~ "Extract any npm package names"
+    end
+  end
+
   # -- Roundtrip test: verify lists survive DB storage --
 
   describe "SandboxSpec JSON list roundtrip" do

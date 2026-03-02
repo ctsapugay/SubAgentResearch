@@ -161,8 +161,18 @@ defmodule SkillToSandbox.Skills.GitHubFetcher do
   defp fetch_directory(owner, repo, ref, path, original_url) do
     with {:ok, tree_sha} <- get_tree_sha(owner, repo, ref),
          {:ok, tree} <- get_tree_recursive(owner, repo, tree_sha),
-         {:ok, file_tree} <- fetch_blobs(owner, repo, tree, path),
+         {:ok, base_file_tree} <- fetch_blobs(owner, repo, tree, path),
          {:ok, root_url} <- build_root_url(original_url) do
+      file_tree =
+        if subdirectory?(path) do
+          case fetch_repo_root_package_json(owner, repo, ref) do
+            {:ok, content} -> Map.put(base_file_tree, "_repo_root/package.json", content)
+            {:error, _} -> base_file_tree
+          end
+        else
+          base_file_tree
+        end
+
       if map_size(file_tree) == 0 do
         {:error, :empty_directory}
       else
@@ -255,6 +265,31 @@ defmodule SkillToSandbox.Skills.GitHubFetcher do
       end)
 
     {:ok, file_tree}
+  end
+
+  defp subdirectory?(path) when is_binary(path) do
+    String.contains?(path, "/")
+  end
+
+  defp subdirectory?(_), do: false
+
+  defp fetch_repo_root_package_json(owner, repo, ref) do
+    raw_url = "#{raw_base()}/#{owner}/#{repo}/#{ref}/package.json"
+    opts = [headers: auth_headers(), retry: false]
+
+    case Req.get(raw_url, opts) do
+      {:ok, %{status: 200, body: body}} when is_binary(body) ->
+        if valid_utf8?(body), do: {:ok, body}, else: {:error, :binary_content}
+
+      {:ok, %{status: 404}} ->
+        {:error, :not_found}
+
+      {:ok, %{status: 429}} ->
+        {:error, :rate_limited}
+
+      _ ->
+        {:error, :fetch_failed}
+    end
   end
 
   defp path_under?(_path, "") do

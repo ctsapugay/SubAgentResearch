@@ -175,10 +175,10 @@ defmodule SkillToSandbox.Sandbox.DockerfileBuilder do
 
   defp npm_install_command(%{runtime_deps: %{"packages" => pkgs}})
        when map_size(pkgs) > 0 do
-    "npm install --omit=dev"
+    "npm install --omit=dev --legacy-peer-deps"
   end
 
-  defp npm_install_command(_), do: "npm install --omit=dev"
+  defp npm_install_command(_), do: "npm install --omit=dev --legacy-peer-deps"
 
   defp env_line(key, value) when is_binary(value) and value != "" do
     "ENV #{key}=\"#{value}\""
