@@ -133,45 +133,47 @@ defmodule SkillToSandbox.Sandbox.Monitor do
 
   # Periodic health check
   def handle_info(:health_check, state) do
-    new_status =
-      case Docker.container_status(state.container_id) do
-        {:ok, status} -> status
-        {:error, _} -> "error"
-      end
+    # Sandbox may have been deleted (e.g. skill deletion) - exit gracefully
+    case Sandboxes.get_sandbox(state.sandbox_id) do
+      nil ->
+        Logger.info("[Monitor] Sandbox ##{state.sandbox_id} was deleted, stopping monitor")
+        {:stop, :normal, state}
 
-    state =
-      if new_status != state.status do
-        Logger.info(
-          "[Monitor] Sandbox ##{state.sandbox_id} status: #{state.status} → #{new_status}"
-        )
+      sandbox ->
+        new_status =
+          case Docker.container_status(state.container_id) do
+            {:ok, status} -> status
+            {:error, _} -> "error"
+          end
 
-        # Update DB
-        sandbox = Sandboxes.get_sandbox!(state.sandbox_id)
-        {:ok, _} = Sandboxes.update_sandbox(sandbox, %{status: normalize_status(new_status)})
+        state =
+          if new_status != state.status do
+            Logger.info(
+              "[Monitor] Sandbox ##{state.sandbox_id} status: #{state.status} → #{new_status}"
+            )
 
-        # Broadcast status change
-        Phoenix.PubSub.broadcast(
-          SkillToSandbox.PubSub,
-          "sandbox:#{state.sandbox_id}",
-          {:status_change, new_status}
-        )
+            {:ok, _} = Sandboxes.update_sandbox(sandbox, %{status: normalize_status(new_status)})
 
-        # Also broadcast to the global sandbox updates topic
-        Phoenix.PubSub.broadcast(
-          SkillToSandbox.PubSub,
-          "sandboxes:updates",
-          {:sandbox_status_change, state.sandbox_id, new_status}
-        )
+            Phoenix.PubSub.broadcast(
+              SkillToSandbox.PubSub,
+              "sandbox:#{state.sandbox_id}",
+              {:status_change, new_status}
+            )
 
-        %{state | status: new_status}
-      else
-        state
-      end
+            Phoenix.PubSub.broadcast(
+              SkillToSandbox.PubSub,
+              "sandboxes:updates",
+              {:sandbox_status_change, state.sandbox_id, new_status}
+            )
 
-    # Schedule next health check
-    Process.send_after(self(), :health_check, @health_interval_ms)
+            %{state | status: new_status}
+          else
+            state
+          end
 
-    {:noreply, state}
+        Process.send_after(self(), :health_check, @health_interval_ms)
+        {:noreply, state}
+    end
   end
 
   # Catch-all for unexpected port messages
@@ -196,12 +198,16 @@ defmodule SkillToSandbox.Sandbox.Monitor do
         {:error, _} -> "error"
       end
 
-    # Update DB and broadcast
-    sandbox = Sandboxes.get_sandbox!(state.sandbox_id)
-    {:ok, _} = Sandboxes.update_sandbox(sandbox, %{status: new_status})
-    broadcast_status(state.sandbox_id, new_status)
+    case Sandboxes.get_sandbox(state.sandbox_id) do
+      nil ->
+        Logger.info("[Monitor] Sandbox ##{state.sandbox_id} was deleted, stopping monitor")
+        {:stop, :normal, result, %{state | status: new_status}}
 
-    {:reply, result, %{state | status: new_status}}
+      sandbox ->
+        {:ok, _} = Sandboxes.update_sandbox(sandbox, %{status: new_status})
+        broadcast_status(state.sandbox_id, new_status)
+        {:reply, result, %{state | status: new_status}}
+    end
   end
 
   def handle_call(:restart_container, _from, state) do
@@ -214,7 +220,6 @@ defmodule SkillToSandbox.Sandbox.Monitor do
     {new_status, state} =
       case result do
         {:ok, _} ->
-          # Restart log streaming after container comes back
           state = start_log_streaming(state)
           {"running", state}
 
@@ -222,11 +227,16 @@ defmodule SkillToSandbox.Sandbox.Monitor do
           {"error", state}
       end
 
-    sandbox = Sandboxes.get_sandbox!(state.sandbox_id)
-    {:ok, _} = Sandboxes.update_sandbox(sandbox, %{status: new_status})
-    broadcast_status(state.sandbox_id, new_status)
+    case Sandboxes.get_sandbox(state.sandbox_id) do
+      nil ->
+        Logger.info("[Monitor] Sandbox ##{state.sandbox_id} was deleted, stopping monitor")
+        {:stop, :normal, result, %{state | status: new_status, log_buffer: []}}
 
-    {:reply, result, %{state | status: new_status, log_buffer: []}}
+      sandbox ->
+        {:ok, _} = Sandboxes.update_sandbox(sandbox, %{status: new_status})
+        broadcast_status(state.sandbox_id, new_status)
+        {:reply, result, %{state | status: new_status, log_buffer: []}}
+    end
   end
 
   def handle_call(:destroy_container, _from, state) do
@@ -236,13 +246,16 @@ defmodule SkillToSandbox.Sandbox.Monitor do
 
     result = Docker.remove_container(state.container_id)
 
-    # Update DB
-    sandbox = Sandboxes.get_sandbox!(state.sandbox_id)
-    {:ok, _} = Sandboxes.update_sandbox(sandbox, %{status: "stopped"})
-    broadcast_status(state.sandbox_id, "stopped")
+    case Sandboxes.get_sandbox(state.sandbox_id) do
+      nil ->
+        Logger.info("[Monitor] Sandbox ##{state.sandbox_id} was deleted, stopping monitor")
+        {:stop, :normal, result, %{state | status: "stopped"}}
 
-    # Stop the monitor process after destroying
-    {:stop, :normal, result, %{state | status: "stopped"}}
+      sandbox ->
+        {:ok, _} = Sandboxes.update_sandbox(sandbox, %{status: "stopped"})
+        broadcast_status(state.sandbox_id, "stopped")
+        {:stop, :normal, result, %{state | status: "stopped"}}
+    end
   end
 
   def handle_call(:get_logs, _from, state) do

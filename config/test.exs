@@ -40,3 +40,6 @@ config :phoenix,
 # Exclude Docker-dependent integration tests by default.
 # Run with: mix test --include docker
 config :ex_unit, exclude: [docker: true]
+
+# Bypass debug - uncomment to see request paths
+# config :bypass, enable_debug_log: true

@@ -10,6 +10,8 @@ defmodule SkillToSandbox.Skills do
   import Ecto.Query, warn: false
   alias SkillToSandbox.Repo
   alias SkillToSandbox.Skills.Skill
+  alias SkillToSandbox.Analysis
+  alias SkillToSandbox.Sandboxes
 
   @doc """
   Returns the list of all skills, ordered by most recently created.
@@ -51,9 +53,21 @@ defmodule SkillToSandbox.Skills do
 
   @doc """
   Deletes a skill.
+
+  Deletes associated sandboxes first to avoid NOT NULL constraint on
+  sandboxes.sandbox_spec_id (the DB uses on_delete: nilify_all but the
+  column is NOT NULL). Sandbox specs and pipeline runs are cascade-deleted
+  by the database when the skill is deleted.
   """
   def delete_skill(%Skill{} = skill) do
-    Repo.delete(skill)
+    Repo.transaction(fn ->
+      spec_ids =
+        Analysis.specs_for_skill(skill.id)
+        |> Enum.map(& &1.id)
+
+      Sandboxes.delete_sandboxes_for_spec_ids(spec_ids)
+      Repo.delete!(skill)
+    end)
   end
 
   @doc """

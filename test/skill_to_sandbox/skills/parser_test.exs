@@ -396,4 +396,37 @@ defmodule SkillToSandbox.Skills.ParserTest do
       assert parsed["raw_guidelines"] =~ "Ref content"
     end
   end
+
+  describe "parse/1 with allowed-tools frontmatter" do
+    test "extracts agent-browser from allowed-tools" do
+      content = """
+      ---
+      name: agent-browser
+      allowed-tools: Bash(npx agent-browser:*), Bash(agent-browser:*)
+      ---
+      # Agent Browser
+      """
+
+      {:ok, parsed} = Parser.parse(content)
+      assert "agent-browser" in parsed["mentioned_dependencies"]
+    end
+
+    test "extracts multiple packages from allowed-tools" do
+      content = """
+      ---
+      allowed-tools: Bash(npx foo:*), Bash(bar:*)
+      ---
+      # Skill
+      """
+
+      {:ok, parsed} = Parser.parse(content)
+      assert "foo" in parsed["mentioned_dependencies"]
+      assert "bar" in parsed["mentioned_dependencies"]
+    end
+
+    test "no allowed-tools returns empty list for that source" do
+      {:ok, parsed} = Parser.parse(fixture("frontend_design_skill.md"))
+      assert is_list(parsed["mentioned_dependencies"])
+    end
+  end
 end

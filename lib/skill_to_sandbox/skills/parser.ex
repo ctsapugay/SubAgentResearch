@@ -181,7 +181,9 @@ defmodule SkillToSandbox.Skills.Parser do
     sections = extract_sections(body)
     mentioned_tools = detect_tools(body)
     mentioned_frameworks = detect_frameworks(body)
-    mentioned_dependencies = detect_dependencies(body)
+    body_deps = detect_dependencies(body)
+    allowed_tools_deps = extract_allowed_tools_deps(meta)
+    mentioned_dependencies = (body_deps ++ allowed_tools_deps) |> Enum.uniq()
 
     name = meta["name"] || extract_first_heading(raw_content)
     description = meta["description"]
@@ -204,6 +206,26 @@ defmodule SkillToSandbox.Skills.Parser do
       _ -> nil
     end
   end
+
+  # Extracts npm package names from allowed-tools frontmatter.
+  # Supports formats: Bash(npx agent-browser:*), Bash(agent-browser:*)
+  defp extract_allowed_tools_deps(meta) when is_map(meta) do
+    case meta["allowed-tools"] do
+      nil ->
+        []
+
+      val when is_binary(val) ->
+        Regex.scan(~r{Bash\((?:npx\s+)?([a-zA-Z0-9@/\-]+):?\*?\)}i, val)
+        |> Enum.map(fn [_, pkg] -> String.trim(pkg) end)
+        |> Enum.reject(&(&1 == ""))
+        |> Enum.uniq()
+
+      _ ->
+        []
+    end
+  end
+
+  defp extract_allowed_tools_deps(_), do: []
 
   # -- Directory parsing --
 
@@ -293,6 +315,9 @@ defmodule SkillToSandbox.Skills.Parser do
         {new_secs, new_tls, new_frms, new_dps, new_bds}
       end)
 
+    allowed_tools_deps = extract_allowed_tools_deps(meta)
+    deps = (deps ++ allowed_tools_deps) |> Enum.uniq()
+
     name = meta["name"] || extract_first_heading(primary_content)
     description = meta["description"]
     raw_guidelines = bodies |> Enum.join("\n\n") |> String.trim()
@@ -303,7 +328,7 @@ defmodule SkillToSandbox.Skills.Parser do
       "sections" => Enum.uniq(sections),
       "mentioned_tools" => Enum.uniq(tools),
       "mentioned_frameworks" => Enum.uniq(frameworks),
-      "mentioned_dependencies" => Enum.uniq(deps),
+      "mentioned_dependencies" => deps,
       "raw_guidelines" => raw_guidelines,
       "frontmatter" => meta
     }

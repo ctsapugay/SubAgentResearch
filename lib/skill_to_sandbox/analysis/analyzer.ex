@@ -44,6 +44,8 @@ defmodule SkillToSandbox.Analysis.Analyzer do
      - Use "@types/react", NOT "react-types"
      - When unsure about an exact package name, OMIT it rather than guess
   8. For version specifiers, use realistic ranges (e.g. "^18.0.0" for React, "^3.0.0" for Tailwind)
+  9. If the skill's frontmatter includes "allowed-tools" with Bash(npx <package>:*) or Bash(<package>:*),
+     you MUST add that package to runtime_deps.packages (npm) so it is installed in the container.
 
   You MUST respond with ONLY a valid JSON object, no markdown fences, no explanation.
   """
@@ -130,6 +132,12 @@ defmodule SkillToSandbox.Analysis.Analyzer do
 
   def validate_spec(_), do: {:error, "Spec must be a map"}
 
+  @doc false
+  def user_prompt_for_skill(%Skill{} = skill) do
+    scanner_result = DependencyScanner.scan(skill.file_tree || %{})
+    build_user_prompt(skill, scanner_result)
+  end
+
   # -- Prompt construction --
 
   defp build_user_prompt(%Skill{} = skill, scanner_result) do
@@ -144,6 +152,7 @@ defmodule SkillToSandbox.Analysis.Analyzer do
     scanner_section = format_scanner_section(scanner_result)
     directory_section = format_directory_section(skill)
     dependency_instruction = format_dependency_instruction(scanner_result)
+    allowed_tools_section = format_allowed_tools_section(parsed)
 
     """
     Here is the skill definition:
@@ -153,7 +162,7 @@ defmodule SkillToSandbox.Analysis.Analyzer do
     Detected tools: #{tools}
     Detected frameworks: #{frameworks}
     Detected dependencies: #{deps}
-    #{scanner_section}#{directory_section}#{dependency_instruction}
+    #{scanner_section}#{directory_section}#{dependency_instruction}#{allowed_tools_section}
 
     Full skill content:
     ---
@@ -259,6 +268,27 @@ defmodule SkillToSandbox.Analysis.Analyzer do
   end
 
   defp format_dependency_instruction(_), do: ""
+
+  defp format_allowed_tools_section(parsed) when is_map(parsed) do
+    case get_in(parsed, ["frontmatter", "allowed-tools"]) do
+      nil ->
+        ""
+
+      "" ->
+        ""
+
+      val when is_binary(val) and byte_size(val) > 0 ->
+        "\nIMPORTANT: The skill's frontmatter specifies allowed-tools: #{val}\n" <>
+          "These are CLI tools the skill requires. Extract any npm package names " <>
+          "(e.g. 'agent-browser' from 'Bash(npx agent-browser:*)') and ADD them to runtime_deps.packages. " <>
+          "They must be installed for the skill to work.\n"
+
+      _ ->
+        ""
+    end
+  end
+
+  defp format_allowed_tools_section(_), do: ""
 
   defp additional_file_content(%Skill{source_type: "directory", file_tree: file_tree})
        when is_map(file_tree) and map_size(file_tree) > 0 do
