@@ -207,9 +207,13 @@ defmodule SkillToSandbox.Skills.Parser do
     end
   end
 
-  # Extracts npm package names from allowed-tools frontmatter.
-  # Supports formats: Bash(npx agent-browser:*), Bash(agent-browser:*)
-  defp extract_allowed_tools_deps(meta) when is_map(meta) do
+  @doc """
+  Extracts npm package names from allowed-tools frontmatter.
+
+  Supports formats: Bash(npx agent-browser:*), Bash(agent-browser:*)
+  Returns a list of package names.
+  """
+  def extract_allowed_tools_deps(meta) when is_map(meta) do
     case meta["allowed-tools"] do
       nil ->
         []
@@ -225,7 +229,7 @@ defmodule SkillToSandbox.Skills.Parser do
     end
   end
 
-  defp extract_allowed_tools_deps(_), do: []
+  def extract_allowed_tools_deps(_), do: []
 
   # -- Directory parsing --
 

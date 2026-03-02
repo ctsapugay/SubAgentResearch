@@ -339,6 +339,32 @@ defmodule SkillToSandbox.Analysis.AnalyzerTest do
 
       assert merged.runtime_deps == validated.runtime_deps
     end
+
+    test "prefers Scanner pip packages when pyproject.toml found" do
+      {:ok, validated} =
+        @valid_spec_json
+        |> Jason.decode!()
+        |> Analyzer.validate_spec()
+
+      validated = %{
+        validated
+        | runtime_deps: %{"manager" => "pip", "packages" => %{"flask" => "^3.0.0"}}
+      }
+
+      scanner_result = %{
+        npm: %{},
+        pip: %{"flask" => ">=3.0", "requests" => ">=2.28.0"},
+        package_json_path: nil,
+        requirements_path: nil,
+        pyproject_path: "pyproject.toml"
+      }
+
+      merged = Analyzer.merge_scanner_deps(validated, scanner_result)
+
+      assert merged.runtime_deps["manager"] == "pip"
+      assert merged.runtime_deps["packages"]["flask"] == ">=3.0"
+      assert merged.runtime_deps["packages"]["requests"] == ">=2.28.0"
+    end
   end
 
   # -- allowed-tools prompt section --

@@ -134,8 +134,16 @@ defmodule SkillToSandbox.Skills.GitHubFetcherTest do
         |> Plug.Conn.send_resp(200, Jason.encode!(body))
       end)
 
-      # Repo root package.json (404 - not in this repo, we don't add it)
+      # Repo root files (404 - not in this repo, we don't add them)
       Bypass.expect(bypass_raw, "GET", "/org/repo/main/package.json", fn conn ->
+        Plug.Conn.send_resp(conn, 404, "Not Found")
+      end)
+
+      Bypass.expect(bypass_raw, "GET", "/org/repo/main/requirements.txt", fn conn ->
+        Plug.Conn.send_resp(conn, 404, "Not Found")
+      end)
+
+      Bypass.expect(bypass_raw, "GET", "/org/repo/main/pyproject.toml", fn conn ->
         Plug.Conn.send_resp(conn, 404, "Not Found")
       end)
 
@@ -196,6 +204,14 @@ defmodule SkillToSandbox.Skills.GitHubFetcherTest do
       Bypass.expect(bypass_raw, "GET", "/org/repo/main/package.json", fn conn ->
         pkg = %{"dependencies" => %{"agent-browser" => "latest", "playwright-core" => "^1.40.0"}}
         Plug.Conn.send_resp(conn, 200, Jason.encode!(pkg))
+      end)
+
+      Bypass.expect(bypass_raw, "GET", "/org/repo/main/requirements.txt", fn conn ->
+        Plug.Conn.send_resp(conn, 404, "Not Found")
+      end)
+
+      Bypass.expect(bypass_raw, "GET", "/org/repo/main/pyproject.toml", fn conn ->
+        Plug.Conn.send_resp(conn, 404, "Not Found")
       end)
 
       assert {:ok, result} =
@@ -297,8 +313,16 @@ defmodule SkillToSandbox.Skills.GitHubFetcherTest do
         |> Plug.Conn.send_resp(200, Jason.encode!(body))
       end)
 
-      # Repo root package.json (404 - subdirectory fetch still attempts this)
+      # Repo root files (404 - subdirectory fetch attempts these)
       Bypass.expect(bypass_raw, "GET", "/org/repo/main/package.json", fn conn ->
+        Plug.Conn.send_resp(conn, 404, "Not Found")
+      end)
+
+      Bypass.expect(bypass_raw, "GET", "/org/repo/main/requirements.txt", fn conn ->
+        Plug.Conn.send_resp(conn, 404, "Not Found")
+      end)
+
+      Bypass.expect(bypass_raw, "GET", "/org/repo/main/pyproject.toml", fn conn ->
         Plug.Conn.send_resp(conn, 404, "Not Found")
       end)
 

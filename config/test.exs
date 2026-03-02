@@ -41,5 +41,8 @@ config :phoenix,
 # Run with: mix test --include docker
 config :ex_unit, exclude: [docker: true]
 
+# Disable package validation in tests (avoids network calls to npm/PyPI)
+config :skill_to_sandbox, validate_packages: false
+
 # Bypass debug - uncomment to see request paths
 # config :bypass, enable_debug_log: true

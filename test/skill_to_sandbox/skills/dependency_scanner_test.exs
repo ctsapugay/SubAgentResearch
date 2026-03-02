@@ -11,6 +11,7 @@ defmodule SkillToSandbox.Skills.DependencyScannerTest do
       assert result.pip == %{}
       assert result.package_json_path == nil
       assert result.requirements_path == nil
+      assert result.pyproject_path == nil
     end
 
     test "returns empty maps when file_tree is nil" do
@@ -169,6 +170,87 @@ defmodule SkillToSandbox.Skills.DependencyScannerTest do
       assert result.npm["agent-browser"] == "latest"
       assert result.npm["playwright-core"] == "^1.40.0"
       assert result.package_json_path == "_repo_root/package.json"
+    end
+
+    test "extracts pip dependencies from pyproject.toml" do
+      file_tree = %{
+        "pyproject.toml" => """
+        [project]
+        name = "my-skill"
+        dependencies = [
+          "flask>=3.0",
+          "requests>=2.28.0"
+        ]
+        """
+      }
+
+      result = DependencyScanner.scan(file_tree)
+
+      assert result.pip["flask"] == ">=3.0"
+      assert result.pip["requests"] == ">=2.28.0"
+      assert result.pyproject_path == "pyproject.toml"
+    end
+
+    test "merges pyproject deps with requirements.txt" do
+      file_tree = %{
+        "requirements.txt" => "flask==3.0.0",
+        "pyproject.toml" => """
+        [project]
+        dependencies = ["requests>=2.28.0"]
+        """
+      }
+
+      result = DependencyScanner.scan(file_tree)
+
+      assert result.pip["flask"] == "3.0.0"
+      assert result.pip["requests"] == ">=2.28.0"
+    end
+
+    test "follows -r include in requirements.txt" do
+      file_tree = %{
+        "requirements.txt" => """
+        flask==3.0.0
+        -r requirements-dev.txt
+        """,
+        "requirements-dev.txt" => "pytest>=7.0.0"
+      }
+
+      result = DependencyScanner.scan(file_tree)
+
+      assert result.pip["flask"] == "3.0.0"
+      assert result.pip["pytest"] == ">=7.0.0"
+    end
+
+    test "skips -e and -c lines in requirements.txt" do
+      file_tree = %{
+        "requirements.txt" => """
+        flask==3.0.0
+        -e ./local-pkg
+        -c constraints.txt
+        """
+      }
+
+      result = DependencyScanner.scan(file_tree)
+
+      assert result.pip == %{"flask" => "3.0.0"}
+    end
+
+    test "merges multiple package.json with root winning on conflicts" do
+      file_tree = %{
+        "package.json" => """
+        {"dependencies": {"react": "^19.0.0", "root-only": "1.0"}}
+        """,
+        "packages/ui/package.json" => """
+        {"dependencies": {"react": "^18.0.0", "ui-pkg": "2.0"}}
+        """
+      }
+
+      result = DependencyScanner.scan(file_tree)
+
+      assert result.npm["react"] == "^19.0.0"
+      assert result.npm["root-only"] == "1.0"
+      assert result.npm["ui-pkg"] == "2.0"
+      assert result.package_json_path == "package.json"
     end
   end
 end
