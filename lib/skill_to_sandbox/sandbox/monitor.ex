@@ -74,6 +74,14 @@ defmodule SkillToSandbox.Sandbox.Monitor do
     {:via, Registry, {SkillToSandbox.SandboxRegistry, sandbox_id}}
   end
 
+  # Use :temporary so the supervisor does NOT restart when the monitor exits
+  # normally (e.g. when the sandbox is deleted). Without this, :permanent (default)
+  # would cause an infinite restart loop for deleted sandboxes.
+  def child_spec(init_arg) do
+    default = super(init_arg)
+    %{default | restart: :temporary}
+  end
+
   # -------------------------------------------------------------------
   # Callbacks
   # -------------------------------------------------------------------
