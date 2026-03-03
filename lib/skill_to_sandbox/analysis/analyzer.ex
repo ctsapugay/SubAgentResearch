@@ -80,7 +80,8 @@ defmodule SkillToSandbox.Analysis.Analyzer do
          {:ok, validated} <- validate_spec(spec_map),
          merged_scanner <- merge_scanner_deps(validated, scanner_result),
          merged <- merge_extracted_deps(merged_scanner, extracted),
-         with_allowed <- ensure_allowed_tools(merged, skill.parsed_data || %{}),
+         with_react_dom <- ensure_react_dom(merged),
+         with_allowed <- ensure_allowed_tools(with_react_dom, skill.parsed_data || %{}),
          validated_packages <- maybe_validate_packages(with_allowed, scanner_result) do
       Logger.info("[Analyzer] Analysis successful for skill ##{skill.id}")
 
@@ -497,6 +498,26 @@ defmodule SkillToSandbox.Analysis.Analyzer do
   end
 
   def merge_extracted_deps(merged, _), do: merged
+
+  @doc false
+  def ensure_react_dom(spec) when is_map(spec) do
+    runtime_deps = Map.get(spec, :runtime_deps) || Map.get(spec, "runtime_deps") || %{}
+    manager = Map.get(runtime_deps, "manager") || Map.get(runtime_deps, :manager)
+    packages = Map.get(runtime_deps, "packages") || Map.get(runtime_deps, :packages) || %{}
+
+    react_version = Map.get(packages, "react") || Map.get(packages, :react)
+    has_react_dom = Map.has_key?(packages, "react-dom") || Map.has_key?(packages, :react_dom)
+
+    if manager == "npm" and is_binary(react_version) and react_version != "" and not has_react_dom do
+      new_packages = Map.put(packages, "react-dom", react_version)
+      new_runtime = Map.put(runtime_deps, "packages", new_packages)
+      %{spec | runtime_deps: new_runtime}
+    else
+      spec
+    end
+  end
+
+  def ensure_react_dom(spec), do: spec
 
   defp ensure_allowed_tools(merged, parsed) do
     meta = parsed["frontmatter"] || parsed
