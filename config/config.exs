@@ -9,7 +9,9 @@ import Config
 
 config :skill_to_sandbox,
   ecto_repos: [SkillToSandbox.Repo],
-  generators: [timestamp_type: :utc_datetime]
+  generators: [timestamp_type: :utc_datetime],
+  validate_packages: true,
+  validate_packages_timeout_ms: 5_000
 
 # Configure the endpoint
 config :skill_to_sandbox, SkillToSandboxWeb.Endpoint,

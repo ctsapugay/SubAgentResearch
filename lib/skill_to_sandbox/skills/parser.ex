@@ -22,6 +22,8 @@ defmodule SkillToSandbox.Skills.Parser do
   ]
 
   # -- Framework/language keyword patterns --
+  # Express: old pattern \bExpress\b matched the verb "express"; now requires technical context
+  # (Express.js, require('express'), import from 'express', or "express framework")
   @framework_patterns [
     {~r/\bReact\b/, "React"},
     {~r/\bVue\b/, "Vue"},
@@ -49,7 +51,8 @@ defmodule SkillToSandbox.Skills.Parser do
     {~r/\bDjango\b/, "Django"},
     {~r/\bFlask\b/, "Flask"},
     {~r/\bFastAPI\b/, "FastAPI"},
-    {~r/\bExpress\b/, "Express"}
+    {~r/\bExpress\.?js\b|require\s*\(\s*['"]express['"]\)|import\s+.*\s+from\s+['"]express['"]|express\s+framework/i,
+     "Express"}
   ]
 
   # -- Dependency patterns --
@@ -79,7 +82,8 @@ defmodule SkillToSandbox.Skills.Parser do
     {~r/\bThree\.?js\b/i, "Three.js"},
     {~r/\bD3\.?js\b/i, "D3.js"},
     {~r/\bGSAP\b/, "GSAP"},
-    {~r/\bLottie\b/, "Lottie"}
+    {~r/\bLottie\b/, "Lottie"},
+    {~r/\bp5\.?js\b/i, "p5.js"}
   ]
 
   @doc """
@@ -207,9 +211,13 @@ defmodule SkillToSandbox.Skills.Parser do
     end
   end
 
-  # Extracts npm package names from allowed-tools frontmatter.
-  # Supports formats: Bash(npx agent-browser:*), Bash(agent-browser:*)
-  defp extract_allowed_tools_deps(meta) when is_map(meta) do
+  @doc """
+  Extracts npm package names from allowed-tools frontmatter.
+
+  Supports formats: Bash(npx agent-browser:*), Bash(agent-browser:*)
+  Returns a list of package names.
+  """
+  def extract_allowed_tools_deps(meta) when is_map(meta) do
     case meta["allowed-tools"] do
       nil ->
         []
@@ -225,7 +233,7 @@ defmodule SkillToSandbox.Skills.Parser do
     end
   end
 
-  defp extract_allowed_tools_deps(_), do: []
+  def extract_allowed_tools_deps(_), do: []
 
   # -- Directory parsing --
 

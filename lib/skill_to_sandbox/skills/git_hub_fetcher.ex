@@ -165,10 +165,22 @@ defmodule SkillToSandbox.Skills.GitHubFetcher do
          {:ok, root_url} <- build_root_url(original_url) do
       file_tree =
         if subdirectory?(path) do
-          case fetch_repo_root_package_json(owner, repo, ref) do
-            {:ok, content} -> Map.put(base_file_tree, "_repo_root/package.json", content)
-            {:error, _} -> base_file_tree
-          end
+          base_file_tree
+          |> maybe_add_repo_root_file(owner, repo, ref, "package.json", "_repo_root/package.json")
+          |> maybe_add_repo_root_file(
+            owner,
+            repo,
+            ref,
+            "requirements.txt",
+            "_repo_root/requirements.txt"
+          )
+          |> maybe_add_repo_root_file(
+            owner,
+            repo,
+            ref,
+            "pyproject.toml",
+            "_repo_root/pyproject.toml"
+          )
         else
           base_file_tree
         end
@@ -273,8 +285,15 @@ defmodule SkillToSandbox.Skills.GitHubFetcher do
 
   defp subdirectory?(_), do: false
 
-  defp fetch_repo_root_package_json(owner, repo, ref) do
-    raw_url = "#{raw_base()}/#{owner}/#{repo}/#{ref}/package.json"
+  defp maybe_add_repo_root_file(file_tree, owner, repo, ref, filename, storage_key) do
+    case fetch_repo_root_file(owner, repo, ref, filename) do
+      {:ok, content} -> Map.put(file_tree, storage_key, content)
+      {:error, _} -> file_tree
+    end
+  end
+
+  defp fetch_repo_root_file(owner, repo, ref, filename) do
+    raw_url = "#{raw_base()}/#{owner}/#{repo}/#{ref}/#{filename}"
     opts = [headers: auth_headers(), retry: false]
 
     case Req.get(raw_url, opts) do

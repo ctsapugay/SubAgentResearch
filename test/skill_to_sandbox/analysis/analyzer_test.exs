@@ -250,6 +250,62 @@ defmodule SkillToSandbox.Analysis.AnalyzerTest do
     end
   end
 
+  # -- ensure_react_dom/1 tests --
+
+  describe "ensure_react_dom/1" do
+    test "when react is in packages and react-dom is NOT: adds react-dom with same version as react" do
+      spec = %{
+        runtime_deps: %{
+          "manager" => "npm",
+          "packages" => %{"react" => "^18.0.0", "tailwindcss" => "^3.4.0"}
+        }
+      }
+
+      result = Analyzer.ensure_react_dom(spec)
+
+      assert result.runtime_deps["packages"]["react-dom"] == "^18.0.0"
+      assert result.runtime_deps["packages"]["react"] == "^18.0.0"
+    end
+
+    test "when react is in packages and react-dom ALREADY exists: does NOT overwrite (keeps existing react-dom version)" do
+      spec = %{
+        runtime_deps: %{
+          "manager" => "npm",
+          "packages" => %{"react" => "^18.0.0", "react-dom" => "^17.0.0"}
+        }
+      }
+
+      result = Analyzer.ensure_react_dom(spec)
+
+      assert result.runtime_deps["packages"]["react-dom"] == "^17.0.0"
+    end
+
+    test "when react is NOT in packages: leaves spec unchanged (no react-dom added)" do
+      spec = %{
+        runtime_deps: %{"manager" => "npm", "packages" => %{"lodash" => "^4.0.0"}}
+      }
+
+      result = Analyzer.ensure_react_dom(spec)
+
+      refute Map.has_key?(result.runtime_deps["packages"], "react-dom")
+      assert result.runtime_deps["packages"] == spec.runtime_deps["packages"]
+    end
+
+    test "when manager is pip: leaves spec unchanged even if react key somehow existed" do
+      spec = %{
+        runtime_deps: %{
+          "manager" => "pip",
+          "packages" => %{"react" => "^18.0.0", "flask" => ">=3.0"}
+        }
+      }
+
+      result = Analyzer.ensure_react_dom(spec)
+
+      refute Map.has_key?(result.runtime_deps["packages"] || %{}, "react-dom")
+      assert result.runtime_deps["packages"] == spec.runtime_deps["packages"]
+    end
+  end
+
   # -- merge_scanner_deps/2 tests --
 
   describe "merge_scanner_deps/2" do
@@ -338,6 +394,32 @@ defmodule SkillToSandbox.Analysis.AnalyzerTest do
       merged = Analyzer.merge_scanner_deps(validated, scanner_result)
 
       assert merged.runtime_deps == validated.runtime_deps
+    end
+
+    test "prefers Scanner pip packages when pyproject.toml found" do
+      {:ok, validated} =
+        @valid_spec_json
+        |> Jason.decode!()
+        |> Analyzer.validate_spec()
+
+      validated = %{
+        validated
+        | runtime_deps: %{"manager" => "pip", "packages" => %{"flask" => "^3.0.0"}}
+      }
+
+      scanner_result = %{
+        npm: %{},
+        pip: %{"flask" => ">=3.0", "requests" => ">=2.28.0"},
+        package_json_path: nil,
+        requirements_path: nil,
+        pyproject_path: "pyproject.toml"
+      }
+
+      merged = Analyzer.merge_scanner_deps(validated, scanner_result)
+
+      assert merged.runtime_deps["manager"] == "pip"
+      assert merged.runtime_deps["packages"]["flask"] == ">=3.0"
+      assert merged.runtime_deps["packages"]["requests"] == ">=2.28.0"
     end
   end
 

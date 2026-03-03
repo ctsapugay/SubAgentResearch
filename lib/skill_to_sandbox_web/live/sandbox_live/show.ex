@@ -446,11 +446,21 @@ defmodule SkillToSandboxWeb.SandboxLive.Show do
   # -- Private helpers --
 
   defp ensure_monitor_started(sandbox) do
-    if sandbox.status == "running" && sandbox.container_id && !Monitor.alive?(sandbox.id) do
-      DynamicSupervisor.start_child(
-        SkillToSandbox.SandboxMonitorSupervisor,
-        {Monitor, %{sandbox_id: sandbox.id, container_id: sandbox.container_id}}
-      )
+    # Re-fetch from DB to avoid starting a monitor for a sandbox that was deleted
+    # (e.g. from another tab) after this LiveView mounted.
+    case Sandboxes.get_sandbox(sandbox.id) do
+      nil ->
+        :ok
+
+      existing ->
+        if existing.status == "running" &&
+             existing.container_id &&
+             !Monitor.alive?(existing.id) do
+          DynamicSupervisor.start_child(
+            SkillToSandbox.SandboxMonitorSupervisor,
+            {Monitor, %{sandbox_id: existing.id, container_id: existing.container_id}}
+          )
+        end
     end
   end
 

@@ -205,8 +205,29 @@ defmodule SkillToSandbox.Analysis.LLMClient do
     end
   end
 
+  defp send_request("test", _system, _user, _api_key, _model, _opts) do
+    # Used by integration tests to bypass real LLM calls. Returns a minimal valid spec.
+    spec = %{
+      "base_image" => "node:20-slim",
+      "system_packages" => ["git", "curl"],
+      "runtime_deps" => %{"manager" => "npm", "packages" => %{}},
+      "tool_configs" => %{
+        "cli" => %{
+          "shell" => "/bin/bash",
+          "working_dir" => "/workspace",
+          "path_additions" => [],
+          "timeout_seconds" => 30
+        },
+        "web_search" => %{"enabled" => true}
+      },
+      "eval_goals" => List.duplicate("Goal placeholder", 5)
+    }
+
+    {:ok, Jason.encode!(spec)}
+  end
+
   defp send_request(provider, _system, _user, _api_key, _model, _opts) do
-    {:error, "Unsupported LLM provider: #{provider}. Use \"anthropic\" or \"openai\"."}
+    {:error, "Unsupported LLM provider: #{provider}. Use \"anthropic\", \"openai\", or \"test\"."}
   end
 
   # -- Response extraction --
