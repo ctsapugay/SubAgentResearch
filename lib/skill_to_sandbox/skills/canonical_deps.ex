@@ -33,7 +33,8 @@ defmodule SkillToSandbox.Skills.CanonicalDeps do
     "Three.js" => "three",
     "D3.js" => "d3",
     "GSAP" => "gsap",
-    "Lottie" => "lottie-react"
+    "Lottie" => "lottie-react",
+    "p5.js" => "p5"
   }
 
   @default_npm_version "latest"

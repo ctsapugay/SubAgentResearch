@@ -13,7 +13,7 @@ defmodule SkillToSandbox.Analysis.Analyzer do
   require Logger
 
   alias SkillToSandbox.Analysis
-  alias SkillToSandbox.Analysis.LLMClient
+  alias SkillToSandbox.Analysis.{CodeDependencyExtractor, DependencyRelevantFiles, LLMClient}
   alias SkillToSandbox.Skills.{CanonicalDeps, DependencyScanner, PackageValidator, Parser, Skill}
 
   @system_prompt """
@@ -45,6 +45,15 @@ defmodule SkillToSandbox.Analysis.Analyzer do
   8. For version specifiers, use realistic ranges (e.g. "^18.0.0" for React, "^3.0.0" for Tailwind)
   9. If the skill's frontmatter includes "allowed-tools" with Bash(npx <package>:*) or Bash(<package>:*),
      you MUST add that package to runtime_deps.packages (npm) so it is installed in the container.
+  10. VERSION EXTRACTION: When the skill or its template files contain CDN URLs with versions
+      (e.g. cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js), use that EXACT version in
+      runtime_deps. Do not guess or use a different version.
+  11. EVIDENCE-BASED PACKAGES: Only add a package to runtime_deps if there is evidence:
+      - In manifests (package.json, requirements.txt, etc.)
+      - In import/require statements in code files
+      - In <script src="..."> CDN URLs in HTML
+      The word "express" can mean "to express/convey" (verb) – do NOT add Express.js unless
+      you see require('express'), import express, or explicit server/API usage.
 
   You MUST respond with ONLY a valid JSON object, no markdown fences, no explanation.
   """
@@ -61,14 +70,16 @@ defmodule SkillToSandbox.Analysis.Analyzer do
   """
   def analyze(%Skill{} = skill) do
     scanner_result = DependencyScanner.scan(skill.file_tree || %{})
-    user_prompt = build_user_prompt(skill, scanner_result)
+    extracted = CodeDependencyExtractor.extract_all(skill.file_tree || %{})
+    user_prompt = build_user_prompt(skill, scanner_result, extracted)
 
     Logger.info("[Analyzer] Starting analysis for skill ##{skill.id}: #{skill.name}")
 
     with {:ok, raw_response} <- LLMClient.chat(@system_prompt, user_prompt),
          {:ok, spec_map} <- extract_json(raw_response),
          {:ok, validated} <- validate_spec(spec_map),
-         merged <- merge_scanner_deps(validated, scanner_result),
+         merged_scanner <- merge_scanner_deps(validated, scanner_result),
+         merged <- merge_extracted_deps(merged_scanner, extracted),
          with_allowed <- ensure_allowed_tools(merged, skill.parsed_data || %{}),
          validated_packages <- maybe_validate_packages(with_allowed, scanner_result) do
       Logger.info("[Analyzer] Analysis successful for skill ##{skill.id}")
@@ -136,12 +147,13 @@ defmodule SkillToSandbox.Analysis.Analyzer do
   @doc false
   def user_prompt_for_skill(%Skill{} = skill) do
     scanner_result = DependencyScanner.scan(skill.file_tree || %{})
-    build_user_prompt(skill, scanner_result)
+    extracted = CodeDependencyExtractor.extract_all(skill.file_tree || %{})
+    build_user_prompt(skill, scanner_result, extracted)
   end
 
   # -- Prompt construction --
 
-  defp build_user_prompt(%Skill{} = skill, scanner_result) do
+  defp build_user_prompt(%Skill{} = skill, scanner_result, extracted) do
     parsed = skill.parsed_data || %{}
 
     tools = format_list(parsed["mentioned_tools"])
@@ -151,6 +163,7 @@ defmodule SkillToSandbox.Analysis.Analyzer do
     description = skill.description || parsed["description"] || "No description"
 
     scanner_section = format_scanner_section(scanner_result)
+    extracted_section = format_extracted_section(extracted)
     directory_section = format_directory_section(skill)
     dependency_instruction = format_dependency_instruction(scanner_result)
     canonical_section = format_canonical_deps_section(parsed, scanner_result)
@@ -161,10 +174,12 @@ defmodule SkillToSandbox.Analysis.Analyzer do
 
     Name: #{name}
     Description: #{description}
-    Detected tools: #{tools}
-    Detected frameworks: #{frameworks}
-    Detected dependencies: #{deps}
-    #{scanner_section}#{directory_section}#{dependency_instruction}#{canonical_section}#{allowed_tools_section}
+    Detected in documentation text (keyword matching – verify against actual code before adding):
+    Tools: #{tools}
+    Frameworks: #{frameworks}
+    Dependencies: #{deps}
+    Only add a package to runtime_deps if you also see evidence in code (import, require, script src, or manifest).
+    #{scanner_section}#{extracted_section}#{directory_section}#{dependency_instruction}#{canonical_section}#{allowed_tools_section}
 
     Full skill content:
     ---
@@ -261,6 +276,47 @@ defmodule SkillToSandbox.Analysis.Analyzer do
     end
   end
 
+  defp format_extracted_section(%{npm_packages: npm, pip_packages: pip}) do
+    has_npm = is_map(npm) and map_size(npm) > 0
+    has_pip = is_map(pip) and map_size(pip) > 0
+
+    if has_npm or has_pip do
+      lines = []
+
+      lines =
+        if has_npm do
+          pkgs =
+            Enum.map_join(npm, ", ", fn {k, v} ->
+              if v, do: "#{k}: #{v}", else: "#{k}"
+            end)
+
+          lines ++ ["npm: #{pkgs}"]
+        else
+          lines
+        end
+
+      lines =
+        if has_pip do
+          pkgs =
+            Enum.map_join(pip, ", ", fn {k, v} ->
+              if v, do: "#{k}: #{v}", else: "#{k}"
+            end)
+
+          lines ++ ["pip: #{pkgs}"]
+        else
+          lines
+        end
+
+      "\nExtracted from code (CDN URLs and imports):\n" <>
+        Enum.join(lines, "\n") <>
+        "\nUse these exact packages and versions. You may add more if you see additional evidence.\n"
+    else
+      ""
+    end
+  end
+
+  defp format_extracted_section(_), do: ""
+
   defp format_directory_section(%Skill{source_type: "directory", file_tree: file_tree})
        when is_map(file_tree) and map_size(file_tree) > 0 do
     file_list = Map.keys(file_tree) |> Enum.sort() |> Enum.join(", ")
@@ -342,26 +398,17 @@ defmodule SkillToSandbox.Analysis.Analyzer do
 
   defp additional_file_content(%Skill{source_type: "directory", file_tree: file_tree})
        when is_map(file_tree) and map_size(file_tree) > 0 do
-    # Include references/*.md content (truncate if very long)
-    ref_files =
-      file_tree
-      |> Enum.filter(fn {path, _} -> path != "SKILL.md" and String.ends_with?(path, ".md") end)
-      |> Enum.take(5)
+    selected = DependencyRelevantFiles.select_files_for_llm(file_tree, 70_000)
 
-    if ref_files == [] do
+    if selected == [] do
       ""
     else
       sections =
-        Enum.map(ref_files, fn {path, content} ->
-          truncated =
-            if String.length(content) > 4000,
-              do: String.slice(content, 0, 4000) <> "\n...[truncated]",
-              else: content
-
-          "\n---\nFile: #{path}\n---\n#{truncated}"
+        Enum.map(selected, fn {path, content} ->
+          "\n---\nFile: #{path}\n---\n#{content}"
         end)
 
-      "\nAdditional reference files:\n" <> Enum.join(sections, "\n")
+      "\nAdditional files (templates, code, manifests):\n" <> Enum.join(sections, "\n")
     end
   end
 
@@ -413,6 +460,43 @@ defmodule SkillToSandbox.Analysis.Analyzer do
   def merge_scanner_deps(validated, %{package_json_path: _, requirements_path: _} = scanner) do
     merge_scanner_deps(validated, Map.put_new(scanner, :pyproject_path, nil))
   end
+
+  # Merges code-extracted deps into the spec. Extracted packages with versions override LLM;
+  # extracted packages are always included (add if LLM omitted them).
+  @doc false
+  def merge_extracted_deps(merged, extracted)
+
+  def merge_extracted_deps(merged, %{npm_packages: _, pip_packages: _} = extracted) do
+    runtime_deps = merged.runtime_deps || merged[:runtime_deps] || %{}
+    manager = runtime_deps["manager"] || "npm"
+    packages = runtime_deps["packages"] || %{}
+
+    extracted_map =
+      case manager do
+        "npm" -> Map.get(extracted, :npm_packages, %{})
+        "pip" -> Map.get(extracted, :pip_packages, %{})
+        _ -> %{}
+      end
+
+    merged_packages =
+      Enum.reduce(extracted_map, packages, fn {pkg, version}, acc ->
+        cond do
+          not Map.has_key?(acc, pkg) ->
+            Map.put(acc, pkg, version || "latest")
+
+          version != nil and version != "" ->
+            Map.put(acc, pkg, version)
+
+          true ->
+            acc
+        end
+      end)
+
+    runtime_deps = Map.put(runtime_deps, "packages", merged_packages)
+    %{merged | runtime_deps: runtime_deps}
+  end
+
+  def merge_extracted_deps(merged, _), do: merged
 
   defp ensure_allowed_tools(merged, parsed) do
     meta = parsed["frontmatter"] || parsed
