@@ -89,12 +89,28 @@ defmodule SkillToSandbox.Pipeline.Runner do
       step_timings: %{}
     }
 
-    if args[:resume] do
-      send(self(), :resume_from_db)
-    else
-      send(self(), :start_parsing)
-    end
+    first_message =
+      if args[:resume] do
+        :resume_from_db
+      else
+        # On crash restart, the supervisor restarts with same args (no resume).
+        # Check DB: if run has progressed beyond parsing, resume from there
+        # instead of restarting from scratch (which would show "Analyze" again).
+        run = Pipelines.get_run!(run_id)
+        status = String.to_existing_atom(run.status)
 
+        if status in [:pending, :parsing] do
+          :start_parsing
+        else
+          Logger.info(
+            "[Runner] Run ##{run_id} restart detected (status=#{status}), resuming from DB"
+          )
+
+          :resume_from_db
+        end
+      end
+
+    send(self(), first_message)
     {:ok, state}
   end
 
@@ -279,10 +295,17 @@ defmodule SkillToSandbox.Pipeline.Runner do
 
   @impl true
   def handle_cast(:approve_spec, %{status: :reviewing} = state) do
-    spec = Analysis.get_spec!(state.sandbox_spec_id)
-    {:ok, _approved} = Analysis.approve_spec(spec)
-    state = record_step_timing(state, :reviewing)
-    {:noreply, do_start_building(state)}
+    try do
+      spec = Analysis.get_spec!(state.sandbox_spec_id)
+      {:ok, _approved} = Analysis.approve_spec(spec)
+      state = record_step_timing(state, :reviewing)
+      {:noreply, do_start_building(state)}
+    rescue
+      e ->
+        error_msg = "Approve failed: #{Exception.message(e)}"
+        Logger.error("[Runner] approve_spec crashed: #{inspect(e)}")
+        {:noreply, transition(state, :failed, error_msg)}
+    end
   end
 
   def handle_cast(:approve_spec, state) do
@@ -355,15 +378,25 @@ defmodule SkillToSandbox.Pipeline.Runner do
   # Docker build execution
   # -------------------------------------------------------------------
 
+  defp ensure_container_name_free(name) do
+    case Docker.remove_container(name) do
+      {:ok, _} -> :ok
+      {:error, reason} -> {:error, "Could not remove existing container #{name}: #{reason}"}
+    end
+  end
+
   defp execute_docker_build(spec, run_id) do
     tag = "sandbox-#{run_id}-#{:erlang.unique_integer([:positive])}"
     skill = Skills.get_skill!(spec.skill_id)
+    container_name = "sandbox-run-#{run_id}"
 
     with {:ok, context_dir, dockerfile_content} <- BuildContext.assemble(spec, skill),
          # Store the generated Dockerfile content in the spec
          {:ok, _spec} <- Analysis.update_spec(spec, %{dockerfile_content: dockerfile_content}),
          {:ok, _build_output} <- Docker.build_image(context_dir, tag),
-         {:ok, container_id} <- Docker.run_container(tag, "sandbox-run-#{run_id}"),
+         # Remove any existing container with this name (e.g. orphaned from prior run)
+         :ok <- ensure_container_name_free(container_name),
+         {:ok, container_id} <- Docker.run_container(tag, container_name),
          {:ok, sandbox} <-
            Sandboxes.create_sandbox(%{
              sandbox_spec_id: spec.id,

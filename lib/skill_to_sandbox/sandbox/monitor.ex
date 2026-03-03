@@ -79,7 +79,7 @@ defmodule SkillToSandbox.Sandbox.Monitor do
   # would cause an infinite restart loop for deleted sandboxes.
   def child_spec(init_arg) do
     default = super(init_arg)
-    %{default | restart: :temporary}
+    Map.put(default, :restart, :temporary)
   end
 
   # -------------------------------------------------------------------
