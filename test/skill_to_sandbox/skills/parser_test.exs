@@ -397,6 +397,33 @@ defmodule SkillToSandbox.Skills.ParserTest do
     end
   end
 
+  describe "parse/1 browser automation dependency detection" do
+    test "detects Puppeteer (capitalized)" do
+      {:ok, parsed} = Parser.parse("# My Skill\nUses Puppeteer for browser automation.")
+      assert "Puppeteer" in parsed["mentioned_dependencies"]
+    end
+
+    test "detects puppeteer (lowercase, case-insensitive)" do
+      {:ok, parsed} = Parser.parse("# My Skill\nInstall puppeteer to control headless Chrome.")
+      assert "Puppeteer" in parsed["mentioned_dependencies"]
+    end
+
+    test "detects Selenium WebDriver phrase" do
+      {:ok, parsed} = Parser.parse("# My Skill\nUse Selenium WebDriver for cross-browser testing.")
+      assert "Selenium" in parsed["mentioned_dependencies"]
+    end
+
+    test "detects Selenium alone" do
+      {:ok, parsed} = Parser.parse("# My Skill\nSelenium is used to automate browser interactions.")
+      assert "Selenium" in parsed["mentioned_dependencies"]
+    end
+
+    test "detects WebDriver alone" do
+      {:ok, parsed} = Parser.parse("# My Skill\nThe WebDriver protocol drives the browser.")
+      assert "WebDriver" in parsed["mentioned_dependencies"]
+    end
+  end
+
   describe "parse/1 with allowed-tools frontmatter" do
     test "extracts agent-browser from allowed-tools" do
       content = """

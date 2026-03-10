@@ -41,5 +41,25 @@ defmodule SkillToSandbox.Skills.CanonicalDepsTest do
     test "returns empty for unknown manager" do
       assert CanonicalDeps.to_canonical_packages(["React"], "cargo") == %{}
     end
+
+    test "maps Puppeteer to puppeteer" do
+      result = CanonicalDeps.to_canonical_packages(["Puppeteer"], "npm")
+      assert result["puppeteer"] == "latest"
+    end
+
+    test "maps Selenium to selenium-webdriver" do
+      result = CanonicalDeps.to_canonical_packages(["Selenium"], "npm")
+      assert result["selenium-webdriver"] == "latest"
+    end
+
+    test "maps WebDriver to selenium-webdriver" do
+      result = CanonicalDeps.to_canonical_packages(["WebDriver"], "npm")
+      assert result["selenium-webdriver"] == "latest"
+    end
+
+    test "maps Playwright Test to @playwright/test" do
+      result = CanonicalDeps.to_canonical_packages(["Playwright Test"], "npm")
+      assert result["@playwright/test"] == "latest"
+    end
   end
 end
