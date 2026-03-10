@@ -306,6 +306,129 @@ defmodule SkillToSandbox.Analysis.AnalyzerTest do
     end
   end
 
+  # -- ensure_browser_system_deps/1 tests --
+
+  describe "ensure_browser_system_deps/1" do
+    test "playwright in packages triggers system dep injection" do
+      spec = %{
+        base_image: "node:20-slim",
+        system_packages: [],
+        runtime_deps: %{"manager" => "npm", "packages" => %{"playwright" => "latest"}},
+        tool_configs: %{"cli" => %{}, "web_search" => %{}},
+        eval_goals: [],
+        post_install_commands: []
+      }
+
+      result = Analyzer.ensure_browser_system_deps(spec)
+
+      assert "libnss3" in result.system_packages
+      assert "libglib2.0-0" in result.system_packages
+      assert "libatk1.0-0" in result.system_packages
+      assert "npx playwright install chromium" in result.post_install_commands
+    end
+
+    test "agent-browser in packages triggers system dep injection" do
+      spec = %{
+        base_image: "node:20-slim",
+        system_packages: [],
+        runtime_deps: %{"manager" => "npm", "packages" => %{"agent-browser" => "latest"}},
+        tool_configs: %{"cli" => %{}, "web_search" => %{}},
+        eval_goals: [],
+        post_install_commands: []
+      }
+
+      result = Analyzer.ensure_browser_system_deps(spec)
+
+      assert "libnss3" in result.system_packages
+      assert "libglib2.0-0" in result.system_packages
+      assert "npx playwright install chromium" in result.post_install_commands
+    end
+
+    test "puppeteer in packages triggers system dep injection" do
+      spec = %{
+        base_image: "node:20-slim",
+        system_packages: [],
+        runtime_deps: %{"manager" => "npm", "packages" => %{"puppeteer" => "latest"}},
+        tool_configs: %{"cli" => %{}, "web_search" => %{}},
+        eval_goals: [],
+        post_install_commands: []
+      }
+
+      result = Analyzer.ensure_browser_system_deps(spec)
+
+      assert "libnss3" in result.system_packages
+      assert "libglib2.0-0" in result.system_packages
+      assert "npx playwright install chromium" in result.post_install_commands
+    end
+
+    test "no browser packages leaves spec unchanged" do
+      spec = %{
+        base_image: "node:20-slim",
+        system_packages: ["git"],
+        runtime_deps: %{"manager" => "npm", "packages" => %{"react" => "^18.0.0"}},
+        tool_configs: %{"cli" => %{}, "web_search" => %{}},
+        eval_goals: [],
+        post_install_commands: []
+      }
+
+      result = Analyzer.ensure_browser_system_deps(spec)
+
+      assert result.system_packages == ["git"]
+      assert result.post_install_commands == []
+    end
+
+    test "existing system_packages are preserved (union not replace)" do
+      spec = %{
+        base_image: "node:20-slim",
+        system_packages: ["git", "curl"],
+        runtime_deps: %{"manager" => "npm", "packages" => %{"playwright" => "latest"}},
+        tool_configs: %{"cli" => %{}, "web_search" => %{}},
+        eval_goals: [],
+        post_install_commands: []
+      }
+
+      result = Analyzer.ensure_browser_system_deps(spec)
+
+      assert "git" in result.system_packages
+      assert "curl" in result.system_packages
+      assert "libnss3" in result.system_packages
+    end
+
+    test "playwright install already in post_install_commands is not duplicated" do
+      spec = %{
+        base_image: "node:20-slim",
+        system_packages: [],
+        runtime_deps: %{"manager" => "npm", "packages" => %{"playwright" => "latest"}},
+        tool_configs: %{"cli" => %{}, "web_search" => %{}},
+        eval_goals: [],
+        post_install_commands: ["npx playwright install chromium"]
+      }
+
+      result = Analyzer.ensure_browser_system_deps(spec)
+
+      count =
+        Enum.count(result.post_install_commands, &(&1 == "npx playwright install chromium"))
+
+      assert count == 1
+    end
+
+    test "playwright install in post_install (no packages) still triggers system dep injection" do
+      spec = %{
+        base_image: "node:20-slim",
+        system_packages: [],
+        runtime_deps: %{"manager" => "npm", "packages" => %{}},
+        tool_configs: %{"cli" => %{}, "web_search" => %{}},
+        eval_goals: [],
+        post_install_commands: ["npx playwright install chromium"]
+      }
+
+      result = Analyzer.ensure_browser_system_deps(spec)
+
+      assert "libnss3" in result.system_packages
+      assert "libglib2.0-0" in result.system_packages
+    end
+  end
+
   # -- merge_scanner_deps/2 tests --
 
   describe "merge_scanner_deps/2" do

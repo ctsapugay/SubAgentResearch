@@ -35,7 +35,18 @@ defmodule SkillToSandbox.Analysis.Analyzer do
   3. Evaluation goals should be concrete, actionable tasks (not vague descriptions)
   4. Evaluation goals should span easy/medium/hard difficulty
   5. Always include git and curl in system_packages (universally useful)
-  6. For web/frontend skills, include a browser or headless browser if the skill mentions browser usage
+  6. BROWSER AUTOMATION: If the skill involves browser automation — indicated by keywords like
+     Playwright, Puppeteer, Chromium, headless browser, browser automation, or npm packages like
+     playwright, puppeteer, agent-browser, or @playwright/test — you MUST:
+     a) Use "node:20" as the base image (NOT "node:20-slim" — slim images lack the OS libraries
+        Chromium requires at runtime, causing browser launch failures)
+     b) Include ALL of the following in system_packages (required Chromium runtime libraries):
+        libglib2.0-0 libnspr4 libnss3 libatk1.0-0 libatk-bridge2.0-0 libdbus-1-3 libcups2
+        libxcb1 libxkbcommon0 libatspi2.0-0 libx11-6 libxcomposite1 libxdamage1 libxext6
+        libxfixes3 libxrandr2 libgbm1 libcairo2 libpango-1.0-0 libasound2
+     c) Include "npx playwright install chromium" in post_install_commands
+     NOTE: The npm package "agent-browser" uses Playwright/Chromium internally — treat any skill
+     using agent-browser as a browser skill requiring all of the above.
   7. CRITICAL: Only include packages that ACTUALLY EXIST on the package registry (npm, PyPI).
      Use the EXACT canonical package name as published. Common mistakes to avoid:
      - Use "motion" or "framer-motion", NOT "use-motion" or "react-motion-library"
@@ -60,6 +71,21 @@ defmodule SkillToSandbox.Analysis.Analyzer do
 
   @required_keys ~w(base_image system_packages runtime_deps tool_configs eval_goals)
 
+  @browser_npm_packages ~w(
+    playwright playwright-core @playwright/test playwright-chromium
+    playwright-firefox playwright-webkit puppeteer puppeteer-core
+    puppeteer-cluster agent-browser @sparticuz/chromium
+  )
+
+  @chromium_system_packages ~w(
+    libglib2.0-0 libnspr4 libnss3 libatk1.0-0 libatk-bridge2.0-0
+    libdbus-1-3 libcups2 libxcb1 libxkbcommon0 libatspi2.0-0
+    libx11-6 libxcomposite1 libxdamage1 libxext6 libxfixes3
+    libxrandr2 libgbm1 libcairo2 libpango-1.0-0 libasound2
+  )
+
+  @playwright_install_command "npx playwright install chromium"
+
   @doc """
   Analyze a skill and produce a sandbox specification.
 
@@ -82,7 +108,8 @@ defmodule SkillToSandbox.Analysis.Analyzer do
          merged <- merge_extracted_deps(merged_scanner, extracted),
          with_react_dom <- ensure_react_dom(merged),
          with_allowed <- ensure_allowed_tools(with_react_dom, skill.parsed_data || %{}),
-         validated_packages <- maybe_validate_packages(with_allowed, scanner_result) do
+         with_browser <- ensure_browser_system_deps(with_allowed),
+         validated_packages <- maybe_validate_packages(with_browser, scanner_result) do
       Logger.info("[Analyzer] Analysis successful for skill ##{skill.id}")
 
       Analysis.create_spec(
@@ -190,7 +217,7 @@ defmodule SkillToSandbox.Analysis.Analyzer do
 
     Produce a JSON object matching this exact structure:
     {
-      "base_image": "node:20-slim",
+      "base_image": "node:20-slim (use node:20 for browser/Playwright/Puppeteer skills)",
       "system_packages": ["git", "curl", "..."],
       "runtime_deps": {
         "manager": "npm",
@@ -518,6 +545,47 @@ defmodule SkillToSandbox.Analysis.Analyzer do
   end
 
   def ensure_react_dom(spec), do: spec
+
+  @doc false
+  def ensure_browser_system_deps(spec) when is_map(spec) do
+    runtime_deps = Map.get(spec, :runtime_deps) || Map.get(spec, "runtime_deps") || %{}
+    packages = Map.get(runtime_deps, "packages") || %{}
+    post_install = Map.get(spec, :post_install_commands) || []
+
+    package_keys = Map.keys(packages) |> Enum.map(&to_string/1)
+
+    browser_in_packages = Enum.any?(package_keys, &(&1 in @browser_npm_packages))
+
+    browser_in_post_install =
+      Enum.any?(post_install, fn cmd ->
+        String.contains?(to_string(cmd), "playwright install")
+      end)
+
+    if browser_in_packages or browser_in_post_install do
+      current_sys_pkgs = Map.get(spec, :system_packages) || []
+      new_sys_pkgs = Enum.uniq(current_sys_pkgs ++ @chromium_system_packages)
+
+      already_has_install =
+        Enum.any?(post_install, fn cmd ->
+          String.contains?(to_string(cmd), "playwright install")
+        end)
+
+      new_post_install =
+        if already_has_install do
+          post_install
+        else
+          post_install ++ [@playwright_install_command]
+        end
+
+      spec
+      |> Map.put(:system_packages, new_sys_pkgs)
+      |> Map.put(:post_install_commands, new_post_install)
+    else
+      spec
+    end
+  end
+
+  def ensure_browser_system_deps(spec), do: spec
 
   defp ensure_allowed_tools(merged, parsed) do
     meta = parsed["frontmatter"] || parsed
